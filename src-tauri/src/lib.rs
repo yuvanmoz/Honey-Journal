@@ -5,7 +5,7 @@ use std::path::Path;
 #[tauri::command]
 fn select_folder(app: tauri::AppHandle) -> Option<String> {
   let folder = app.dialog().file().blocking_pick_folder();
-  folder.map(|p| p.into_path().to_string_lossy().into_owned())
+  folder.and_then(|p| p.into_path().ok()).map(|pb| pb.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
