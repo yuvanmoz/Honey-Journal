@@ -11,33 +11,8 @@
 </head>
 <body>
 
-  <!-- Prototype Layout Controller Header -->
-  <header class="prototype-header">
-    <div class="prototype-title">
-      <i class="fa-solid fa-honey-pot" style="color: var(--accent-gold);"></i>
-      Honey <span>Journal</span>
-    </div>
-    <div style="display: flex; align-items: center;">
-      <div class="layout-controls">
-        <button class="layout-btn active" id="btn-split" onclick="setLayoutMode('split')">
-          <i class="fa-solid fa-columns"></i> Side-by-Side
-        </button>
-        <button class="layout-btn" id="btn-desktop" onclick="setLayoutMode('desktop-only')">
-          <i class="fa-solid fa-desktop"></i> Desktop
-        </button>
-        <button class="layout-btn" id="btn-mobile" onclick="setLayoutMode('mobile-only')">
-          <i class="fa-solid fa-mobile-screen"></i> Mobile
-        </button>
-      </div>
-      <!-- Theme Toggle Button -->
-      <button class="btn-icon" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme" style="margin-left: 12px;">
-        <i class="fa-solid fa-moon"></i>
-      </button>
-    </div>
-  </header>
-
   <!-- Prototype Viewport Container -->
-  <main class="prototype-viewport layout-split" id="main-viewport">
+  <main class="prototype-viewport" id="main-viewport">
 
     <!-- ==========================================================================
          DESKTOP SECTION
@@ -69,14 +44,11 @@
         </div>
 
         <div class="sidebar-bottom">
+          <div class="sidebar-item" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+            <i class="fa-solid fa-moon"></i> <span>Theme Toggle</span>
+          </div>
           <div class="sidebar-item" id="nav-d-settings" onclick="switchDesktopView('settings')">
             <i class="fa-solid fa-gear"></i> Settings
-          </div>
-          <div class="sync-status">
-            <span><i class="fa-solid fa-rotate"></i> Sync Status</span>
-            <span style="color: var(--color-bull); display: flex; align-items: center; gap: 6px; font-weight: 600;">
-              Synced <span class="sync-dot"></span>
-            </span>
           </div>
         </div>
       </aside>
@@ -173,21 +145,25 @@
       <!-- Right Detail Panel (Notion-style) -->
       <aside class="desktop-detail closed" id="desktop-detail-pane">
         <div class="detail-header">
-          <button class="btn-icon" onclick="closeDesktopDetail()"><i class="fa-solid fa-arrow-left"></i> Close</button>
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Setup Details</div>
           <div class="detail-actions-right">
-            <button class="btn-icon" style="color: var(--color-bear);" onclick="deleteActiveEntry()" title="Delete Entry"><i class="fa-solid fa-trash-can"></i> Delete</button>
-            <button class="btn-icon" onclick="closeDesktopDetail()"><i class="fa-solid fa-xmark"></i></button>
+            <button class="btn-icon" style="color: var(--color-bear); padding: 6px;" onclick="deleteActiveEntry()" title="Delete Entry"><i class="fa-solid fa-trash-can"></i></button>
+            <button class="btn-icon" style="padding: 6px;" onclick="closeDesktopDetail()" title="Close Panel"><i class="fa-solid fa-xmark"></i></button>
           </div>
         </div>
 
         <div class="detail-body" id="detail-form-container">
           <!-- Image attachment drag and drop -->
-          <div class="detail-chart-wrapper" onclick="triggerImageUpload('desktop')">
-            <img src="" alt="Chart Screenshot" class="detail-chart" id="detail-chart-img">
-            <div class="chart-upload-overlay">
-              <i class="fa-solid fa-cloud-arrow-up"></i>
-              <span>Click to change chart screenshot</span>
+          <div class="detail-images-container">
+            <div class="detail-chart-wrapper" id="desktop-main-image-wrapper">
+              <img src="" alt="Chart Screenshot" class="detail-chart" id="detail-chart-img">
+              <div class="chart-upload-overlay" onclick="triggerImageUpload('desktop')">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>Upload New Screenshot</span>
+              </div>
+              <button class="delete-current-image-btn" onclick="deleteActiveImage('desktop'); event.stopPropagation();" title="Delete current image"><i class="fa-solid fa-trash-can"></i></button>
             </div>
+            <div class="thumbnail-strip" id="desktop-thumbnail-strip"></div>
             <input type="file" id="desktop-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'desktop')">
           </div>
 
@@ -341,12 +317,16 @@
 
             <div class="phone-detail-body" id="mobile-detail-body">
               <!-- Screenshot (repositioned at the very top of details layout) -->
-              <div class="detail-chart-wrapper" onclick="triggerImageUpload('mobile')" style="margin-bottom:12px;">
-                <img src="" alt="Chart Screenshot" class="detail-chart" id="mobile-detail-chart-img" style="display: block; width: 100%; height: auto;">
-                <div class="chart-upload-overlay">
-                  <i class="fa-solid fa-cloud-arrow-up"></i>
-                  <span>Click to change chart</span>
+              <div class="mobile-images-container" style="margin-bottom:12px;">
+                <div class="detail-chart-wrapper" id="mobile-main-image-wrapper">
+                  <img src="" alt="Chart Screenshot" class="detail-chart" id="mobile-detail-chart-img" style="display: block; width: 100%; height: auto;">
+                  <div class="chart-upload-overlay" onclick="triggerImageUpload('mobile')">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Upload Screenshot</span>
+                  </div>
+                  <button class="delete-current-image-btn" onclick="deleteActiveImage('mobile'); event.stopPropagation();" title="Delete current image"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
+                <div class="thumbnail-strip" id="mobile-thumbnail-strip"></div>
                 <input type="file" id="mobile-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'mobile')">
               </div>
 

@@ -7,6 +7,11 @@ let activeEntryId = null;
 let activeCalendarDate = null; // Filter setups by calendar date if set
 let storagePath = null;        // Sync/storage folder path on local disk
 
+let activeImageIndex = 0;
+let currentCalendarYear = new Date().getFullYear();
+let currentCalendarMonth = new Date().getMonth();
+
+
 // View state
 let currentDesktopView = 'patterns'; // dashboard, patterns, calendar, stats, settings
 let currentMobileView = 'patterns';  // dashboard, patterns, calendar, stats, more
@@ -136,14 +141,14 @@ async function loadDatabase() {
   const seeds = window.HoneyJournalSeeds;
 
   if (window.__TAURI__ && storagePath) {
-    const { readTextFile, readDir, createDir } = window.__TAURI__.fs;
+    const { invoke } = window.__TAURI__.tauri;
     try {
-      // Create entries directory if not exists
-      await createDir(`${storagePath}\\entries`, { recursive: true }).catch(() => {});
+      // Create entries directory if not exists using native command
+      await invoke('fs_create_dir', { path: `${storagePath}\\entries` });
 
       // Load tags.json
       try {
-        const tagsContent = await readTextFile(`${storagePath}\\tags.json`);
+        const tagsContent = await invoke('fs_read_text_file', { path: `${storagePath}\\tags.json` });
         tags = JSON.parse(tagsContent);
       } catch (err) {
         console.log("No tags.json found, loading seeds...");
@@ -153,7 +158,7 @@ async function loadDatabase() {
 
       // Load attributes.json
       try {
-        const attrsContent = await readTextFile(`${storagePath}\\attributes.json`);
+        const attrsContent = await invoke('fs_read_text_file', { path: `${storagePath}\\attributes.json` });
         customAttributes = JSON.parse(attrsContent);
       } catch (err) {
         console.log("No attributes.json found, loading seeds...");
@@ -163,16 +168,13 @@ async function loadDatabase() {
 
       // Load all files from entries directory
       try {
-        const files = await readDir(`${storagePath}\\entries`);
+        const filesContent = await invoke('fs_read_dir_json', { path: `${storagePath}\\entries` });
         const tempEntries = [];
-        for (const file of files) {
-          if (file.name.endsWith('.json')) {
-            try {
-              const entryContent = await readTextFile(file.path);
-              tempEntries.push(JSON.parse(entryContent));
-            } catch (e) {
-              console.error("Error reading entry file:", file.path, e);
-            }
+        for (const content of filesContent) {
+          try {
+            tempEntries.push(JSON.parse(content));
+          } catch (e) {
+            console.error("Error parsing entry JSON:", e);
           }
         }
         
@@ -223,50 +225,89 @@ async function loadDatabase() {
     customAttributes = seeds.defaultCustomAttributes;
     localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
   }
+
+  // Migrate entries to support images array instead of single image string
+  entries.forEach(e => {
+    if (!e.images) {
+      e.images = e.image ? [e.image] : [];
+    }
+  });
 }
 
-async function saveDatabase() {
+let saveTimeout = null;
+const entriesToSave = new Set();
+
+async function saveDatabase(specificEntry = null, saveAll = false) {
   localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
   localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
   localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
 
   if (window.__TAURI__ && storagePath) {
-    await saveTagsToDisk();
-    await saveAttributesToDisk();
-    for (const entry of entries) {
-      await saveEntryToDisk(entry);
+    if (saveAll) {
+      entries.forEach(e => entriesToSave.add(e.id));
+    } else if (specificEntry) {
+      entriesToSave.add(specificEntry.id);
+    } else if (activeEntryId) {
+      entriesToSave.add(activeEntryId);
     }
+
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+      await saveTagsToDisk();
+      await saveAttributesToDisk();
+      
+      const promises = [];
+      for (const id of entriesToSave) {
+        const entry = entries.find(e => e.id === id);
+        if (entry) {
+          promises.push(saveEntryToDisk(entry));
+        }
+      }
+      await Promise.all(promises);
+      entriesToSave.clear();
+    }, 300);
   }
 }
 
 async function saveTagsToDisk() {
   if (!window.__TAURI__ || !storagePath) return;
-  const { writeTextFile } = window.__TAURI__.fs;
-  await writeTextFile(`${storagePath}\\tags.json`, JSON.stringify(tags, null, 2)).catch(err => {
+  const { invoke } = window.__TAURI__.tauri;
+  await invoke('fs_write_text_file', {
+    path: `${storagePath}\\tags.json`,
+    content: JSON.stringify(tags, null, 2)
+  }).catch(err => {
     console.error("Failed to save tags.json:", err);
   });
 }
 
 async function saveAttributesToDisk() {
   if (!window.__TAURI__ || !storagePath) return;
-  const { writeTextFile } = window.__TAURI__.fs;
-  await writeTextFile(`${storagePath}\\attributes.json`, JSON.stringify(customAttributes, null, 2)).catch(err => {
+  const { invoke } = window.__TAURI__.tauri;
+  await invoke('fs_write_text_file', {
+    path: `${storagePath}\\attributes.json`,
+    content: JSON.stringify(customAttributes, null, 2)
+  }).catch(err => {
     console.error("Failed to save attributes.json:", err);
   });
 }
 
 async function saveEntryToDisk(entry) {
   if (!window.__TAURI__ || !storagePath) return;
-  const { writeTextFile } = window.__TAURI__.fs;
-  await writeTextFile(`${storagePath}\\entries\\entry-${entry.id}.json`, JSON.stringify(entry, null, 2)).catch(err => {
+  const { invoke } = window.__TAURI__.tauri;
+  await invoke('fs_write_text_file', {
+    path: `${storagePath}\\entries\\entry-${entry.id}.json`,
+    content: JSON.stringify(entry, null, 2)
+  }).catch(err => {
     console.error(`Failed to save entry ${entry.id}:`, err);
   });
 }
 
 async function removeEntryFromDisk(entryId) {
   if (!window.__TAURI__ || !storagePath) return;
-  const { removeFile } = window.__TAURI__.fs;
-  await removeFile(`${storagePath}\\entries\\entry-${entryId}.json`).catch(err => {
+  const { invoke } = window.__TAURI__.tauri;
+  await invoke('fs_remove_file', {
+    path: `${storagePath}\\entries\\entry-${entryId}.json`
+  }).catch(err => {
     console.error(`Failed to delete entry ${entryId}:`, err);
   });
 }
@@ -576,13 +617,34 @@ function renderDesktopGallery(list) {
     else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
     else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
 
-    // Image & footer (no bookmark overlay buttons)
+    let displayTitle = entry.title ? entry.title.trim() : '';
+    if (!displayTitle) {
+      if (entry.patterns && entry.patterns.length > 0) {
+        displayTitle = entry.patterns.join(', ');
+      } else {
+        displayTitle = "Untitled Setup";
+      }
+    }
+
+    let tagsHtml = '';
+    if (entry.patterns && entry.patterns.length > 0) {
+      entry.patterns.forEach(pat => {
+        const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-secondary)', bg: 'var(--bg-tertiary)' };
+        tagsHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg}; margin-right: 4px; font-size: 10px; padding: 1px 6px;">${pat}</span>`;
+      });
+    }
+
+    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : 'Images/chart1.png';
+
     card.innerHTML = `
       <div class="card-img-wrapper">
-        <img src="${entry.image || 'Images/chart1.png'}" alt="${entry.title}" class="card-img">
+        <img src="${firstImage}" alt="${displayTitle}" class="card-img">
       </div>
-      <div class="card-content">
-        <div class="card-title">${entry.title}</div>
+      <div class="card-content" style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="card-title" style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${displayTitle}</div>
+        <div class="card-patterns" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+          ${tagsHtml}
+        </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
           <div class="card-footer-left" style="font-size:11px; color:var(--text-secondary);">
             <i class="fa-solid fa-calendar" style="margin-right:4px;"></i>
@@ -619,6 +681,15 @@ function renderDesktopTable(list) {
     tr.onclick = () => openEntryDetail(entry.id);
     if (activeEntryId === entry.id) tr.style.backgroundColor = 'var(--bg-primary)';
 
+    let displayTitle = entry.title ? entry.title.trim() : '';
+    if (!displayTitle) {
+      if (entry.patterns && entry.patterns.length > 0) {
+        displayTitle = entry.patterns.join(', ');
+      } else {
+        displayTitle = "Untitled Setup";
+      }
+    }
+
     let tagsHtml = '';
     entry.patterns.forEach(pat => {
       const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-muted)', bg: 'var(--bg-tertiary)' };
@@ -630,9 +701,11 @@ function renderDesktopTable(list) {
     if (pl.startsWith('-')) plColor = 'var(--color-bear)';
     else if (pl !== '₹0') plColor = 'var(--color-bull)';
 
+    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : 'Images/chart1.png';
+
     tr.innerHTML = `
-      <td><img src="${entry.image}" class="table-img"></td>
-      <td style="font-weight:600;">${entry.title}</td>
+      <td><img src="${firstImage}" class="table-img"></td>
+      <td style="font-weight:600;">${displayTitle}</td>
       <td><span class="tag-badge" style="background-color: var(--bg-tertiary);">${entry.bias}</span></td>
       <td>${tagsHtml}</td>
       <td style="font-family: var(--font-display); font-weight:600; color: ${plColor};">${pl}</td>
@@ -658,12 +731,30 @@ function toggleTablePFSort() {
   renderDesktopContent();
 }
 
+function changeCalendarMonth(delta) {
+  currentCalendarMonth += delta;
+  if (currentCalendarMonth > 11) {
+    currentCalendarMonth = 0;
+    currentCalendarYear += 1;
+  } else if (currentCalendarMonth < 0) {
+    currentCalendarMonth = 11;
+    currentCalendarYear -= 1;
+  }
+  
+  if (currentDesktopView === 'calendar') {
+    renderDesktopCalendar();
+  }
+  if (currentMobileView === 'calendar') {
+    renderMobileCalendar();
+  }
+}
+
 // Desktop Calendar - Render compact grid heights
 function renderDesktopCalendar() {
   const container = document.getElementById('desktop-calendar-view');
   if (!container) return;
   container.innerHTML = '';
-  const calendarHtml = generateCalendarHTML(2026, 4); // May 2026
+  const calendarHtml = generateCalendarHTML(currentCalendarYear, currentCalendarMonth);
   container.innerHTML = calendarHtml;
 }
 
@@ -678,6 +769,8 @@ function generateCalendarHTML(year, monthIndex) {
     cellsHtml += `<div class="calendar-day-cell empty"></div>`;
   }
 
+  const todayObj = new Date();
+
   for (let day = 1; day <= numDays; day++) {
     const currentMonthString = (monthIndex + 1) < 10 ? '0' + (monthIndex + 1) : (monthIndex + 1);
     const currentDayString = day < 10 ? '0' + day : day;
@@ -688,10 +781,21 @@ function generateCalendarHTML(year, monthIndex) {
     let dotsHtml = '';
     dayEntries.forEach(entry => {
       const statusClass = entry.status === 'PASSED' ? 'passed' : 'failed';
-      dotsHtml += `<span class="calendar-trade-dot ${statusClass}" title="${entry.title} (${entry.bias})"></span>`;
+      // Find display title
+      let displayTitle = entry.title ? entry.title.trim() : '';
+      if (!displayTitle) {
+        if (entry.patterns && entry.patterns.length > 0) {
+          displayTitle = entry.patterns.join(', ');
+        } else {
+          displayTitle = "Untitled Setup";
+        }
+      }
+      dotsHtml += `<span class="calendar-trade-dot ${statusClass}" title="${displayTitle} (${entry.bias})"></span>`;
     });
 
-    const isToday = (day === 2 && monthIndex === 5 && year === 2026) ? 'style="border-color: var(--accent-gold);"' : '';
+    const isToday = (day === todayObj.getDate() && monthIndex === todayObj.getMonth() && year === todayObj.getFullYear()) 
+      ? 'style="border-color: var(--accent-gold); border-width: 2px;"' 
+      : '';
     const isSelected = activeCalendarDate === dateString ? 'style="border-color: var(--accent-olive); background-color: var(--accent-olive-light);"' : '';
 
     cellsHtml += `
@@ -708,8 +812,8 @@ function generateCalendarHTML(year, monthIndex) {
     <div class="calendar-header">
       <div class="calendar-header-title">${monthNames[monthIndex]} ${year}</div>
       <div>
-        <button class="btn-icon" style="display: inline-flex;" onclick="alert('Previous month clicked')"><i class="fa-solid fa-chevron-left"></i></button>
-        <button class="btn-icon" style="display: inline-flex;" onclick="alert('Next month clicked')"><i class="fa-solid fa-chevron-right"></i></button>
+        <button class="btn-icon" style="display: inline-flex;" onclick="changeCalendarMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+        <button class="btn-icon" style="display: inline-flex;" onclick="changeCalendarMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
       </div>
     </div>
     <div class="calendar-days-grid">
@@ -742,6 +846,53 @@ function handleCalendarDateClick(dateString) {
   switchMobileView('patterns');
 }
 
+function parsePL(plStr) {
+  if (!plStr) return 0;
+  const normalized = plStr.replace(/[^0-9.-]/g, '');
+  const parsed = parseFloat(normalized);
+  if (isNaN(parsed)) return 0;
+  if (plStr.includes('-')) {
+    return -Math.abs(parsed);
+  }
+  return parsed;
+}
+
+function calculatePatternStats() {
+  const patternProfit = {};
+  const patternCount = {};
+
+  entries.forEach(entry => {
+    const plValue = parsePL(entry.customAttributes['P&L']);
+    const entryPatterns = entry.patterns || [];
+    
+    entryPatterns.forEach(pat => {
+      patternProfit[pat] = (patternProfit[pat] || 0) + plValue;
+      patternCount[pat] = (patternCount[pat] || 0) + 1;
+    });
+  });
+
+  let bestPattern = 'None';
+  let bestProfit = -Infinity;
+  let worstPattern = 'None';
+  let worstProfit = Infinity;
+
+  Object.entries(patternProfit).forEach(([pat, profit]) => {
+    if (profit > bestProfit) {
+      bestProfit = profit;
+      bestPattern = pat;
+    }
+    if (profit < worstProfit) {
+      worstProfit = profit;
+      worstPattern = pat;
+    }
+  });
+
+  return {
+    bestPattern: bestPattern !== 'None' ? `${bestPattern} (${bestProfit >= 0 ? '+' : ''}₹${bestProfit})` : 'N/A',
+    worstPattern: worstPattern !== 'None' ? `${worstPattern} (${worstProfit >= 0 ? '+' : ''}₹${worstProfit})` : 'N/A'
+  };
+}
+
 // Stats & Dashboard
 function renderDesktopStats(isDashboard = false) {
   const container = document.getElementById('desktop-stats-view');
@@ -752,6 +903,7 @@ function renderDesktopStats(isDashboard = false) {
   const winRate = totalTrades > 0 ? ((passedTrades / totalTrades) * 100).toFixed(1) : 0;
 
   if (isDashboard) {
+    const statsObj = calculatePatternStats();
     container.innerHTML = `
       <div class="stats-grid">
         <div class="stat-card">
@@ -770,15 +922,11 @@ function renderDesktopStats(isDashboard = false) {
         <h3 style="padding: 10px 0; font-size: 14px; color: var(--text-secondary);">Setup Insights</h3>
         <div class="stat-list-item">
           <span class="stat-list-label">Most Profitable Pattern</span>
-          <span class="stat-list-val" style="color: var(--color-bull);">VWAP Support (+₹800)</span>
+          <span class="stat-list-val" style="color: var(--color-bull);">${statsObj.bestPattern}</span>
         </div>
         <div class="stat-list-item">
           <span class="stat-list-label">Worst Performing Pattern</span>
-          <span class="stat-list-val" style="color: var(--color-bear);">VWAP Rejection (Failed -₹250)</span>
-        </div>
-        <div class="stat-list-item">
-          <span class="stat-list-label">Syncthing Folder Sync</span>
-          <span class="stat-list-val" style="color: var(--color-bull);"><i class="fa-solid fa-rotate"></i> Synced to Android</span>
+          <span class="stat-list-val" style="color: var(--color-bear);">${statsObj.worstPattern}</span>
         </div>
       </div>
     `;
@@ -868,7 +1016,7 @@ function renderDesktopSettings() {
       <div class="settings-row">
         <div class="settings-row-label">
           <span>Journal Folder Path</span>
-          <span class="settings-row-sub">SQLite database and images folder location</span>
+          <span class="settings-row-sub">Directory where journal entries and image assets are stored</span>
         </div>
         <code style="background-color: var(--bg-secondary); padding: 6px 12px; border-radius: var(--radius-md); font-size: 12px;">${storagePath || 'Not Configured'}</code>
       </div>
@@ -880,14 +1028,6 @@ function renderDesktopSettings() {
         </div>
         <button class="btn-secondary" onclick="chooseStorageFolder()"><i class="fa-solid fa-folder-open"></i> Change Folder</button>
       </div>
-
-      <div class="settings-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px;">
-        <div class="settings-row-label">
-          <span>Syncthing Sync Peer</span>
-          <span class="settings-row-sub">Auto updates local files with Android device</span>
-        </div>
-        <span style="font-weight:600; color: var(--color-bull);"><i class="fa-solid fa-circle-check"></i> Connected with Mobile peer</span>
-      </div>
     </div>
   `;
 }
@@ -895,6 +1035,7 @@ function renderDesktopSettings() {
 // Notion Detail Draw Panel (Desktop)
 function openEntryDetail(id) {
   activeEntryId = id;
+  activeImageIndex = 0; // Reset active image viewer to the first image
   
   // Show Panel
   document.getElementById('desktop-detail-pane').classList.remove('closed');
@@ -919,10 +1060,31 @@ function renderDesktopDetail() {
   const entry = entries.find(e => e.id === activeEntryId);
   if (!entry) return;
 
-  document.getElementById('detail-chart-img').src = entry.image || 'Images/chart1.png';
-  document.getElementById('detail-title').value = entry.title;
-  document.getElementById('detail-notes').value = entry.notes;
-  document.getElementById('detail-mistakes').value = entry.mistakes;
+  const imgs = entry.images || [];
+  const mainImgEl = document.getElementById('detail-chart-img');
+  const mainWrapper = document.getElementById('desktop-main-image-wrapper');
+  const deleteBtn = mainWrapper ? mainWrapper.querySelector('.delete-current-image-btn') : null;
+
+  if (mainImgEl) {
+    if (imgs.length > 0) {
+      mainImgEl.src = imgs[activeImageIndex];
+      mainImgEl.style.display = 'block';
+      if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
+      if (deleteBtn) deleteBtn.style.display = 'flex';
+    } else {
+      mainImgEl.src = '';
+      mainImgEl.style.display = 'none';
+      if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
+      if (deleteBtn) deleteBtn.style.display = 'none';
+    }
+  }
+
+  // Render dynamic thumbnail strip
+  renderThumbnailStrip(entry, 'desktop');
+
+  document.getElementById('detail-title').value = entry.title || '';
+  document.getElementById('detail-notes').value = entry.notes || '';
+  document.getElementById('detail-mistakes').value = entry.mistakes || '';
 
   // Render Attributes List (Builtin + Dynamic Custom)
   const attrList = document.getElementById('detail-attributes-list');
@@ -1215,7 +1377,7 @@ function toggleBookmark(id) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
   entry.bookmarked = !entry.bookmarked;
-  saveDatabase();
+  saveDatabase(entry);
   renderAll();
 }
 
@@ -1226,12 +1388,12 @@ function createNewEntry() {
 
   const newEntry = {
     id: newId,
-    title: "Untitled Candle Setup",
+    title: "",
     bias: "Bullish",
     date: today,
     patterns: [],
     status: "PASSED",
-    image: "Images/chart1.png",
+    images: [],
     notes: "",
     mistakes: "",
     customAttributes: {},
@@ -1244,7 +1406,7 @@ function createNewEntry() {
   });
 
   entries.push(newEntry);
-  saveDatabase();
+  saveDatabase(newEntry);
 
   openEntryDetail(newId);
 }
@@ -1279,12 +1441,55 @@ function handleImageFileSelect(input, platform) {
   reader.onload = (e) => {
     const entry = entries.find(e => e.id === activeEntryId);
     if (entry) {
-      entry.image = e.target.result;
-      saveDatabase();
+      if (!entry.images) entry.images = [];
+      entry.images.push(e.target.result);
+      activeImageIndex = entry.images.length - 1; // set new image as active
+      saveDatabase(entry);
       renderAll();
     }
   };
   reader.readAsDataURL(file);
+  input.value = ""; // clear input
+}
+
+function deleteActiveImage(platform) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry || !entry.images || entry.images.length === 0) return;
+
+  if (confirm("Are you sure you want to delete the current screenshot?")) {
+    entry.images.splice(activeImageIndex, 1);
+    if (activeImageIndex >= entry.images.length) {
+      activeImageIndex = Math.max(0, entry.images.length - 1);
+    }
+    saveDatabase(entry);
+    renderAll();
+  }
+}
+
+function renderThumbnailStrip(entry, platform) {
+  const containerId = platform === 'desktop' ? 'desktop-thumbnail-strip' : 'mobile-thumbnail-strip';
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = '';
+  const imgs = entry.images || [];
+
+  imgs.forEach((imgSrc, idx) => {
+    const thumb = document.createElement('div');
+    thumb.className = `thumbnail-item ${idx === activeImageIndex ? 'active' : ''}`;
+    thumb.onclick = () => {
+      activeImageIndex = idx;
+      renderAll();
+    };
+    thumb.innerHTML = `<img src="${imgSrc}" class="thumbnail-img">`;
+    container.appendChild(thumb);
+  });
+
+  const addBtn = document.createElement('div');
+  addBtn.className = 'thumbnail-item add-btn';
+  addBtn.onclick = () => triggerImageUpload(platform);
+  addBtn.innerHTML = `<i class="fa-solid fa-plus"></i>`;
+  container.appendChild(addBtn);
 }
 
 function clearDatabase() {
@@ -1408,15 +1613,37 @@ function renderMobileGallery(list) {
     else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
     else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
 
+    let displayTitle = entry.title ? entry.title.trim() : '';
+    if (!displayTitle) {
+      if (entry.patterns && entry.patterns.length > 0) {
+        displayTitle = entry.patterns.join(', ');
+      } else {
+        displayTitle = "Untitled Setup";
+      }
+    }
+
+    let tagsHtml = '';
+    if (entry.patterns && entry.patterns.length > 0) {
+      entry.patterns.forEach(pat => {
+        const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-secondary)', bg: 'var(--bg-tertiary)' };
+        tagsHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg}; margin-right: 2px; font-size: 8px; padding: 1px 4px; scale: 0.95;">${pat}</span>`;
+      });
+    }
+
+    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : 'Images/chart1.png';
+
     card.innerHTML = `
       <div class="phone-card-img-wrapper">
-        <img src="${entry.image}" alt="${entry.title}" class="phone-card-img">
+        <img src="${firstImage}" alt="${displayTitle}" class="phone-card-img">
       </div>
-      <div class="phone-card-header">
-        <span class="phone-card-title">${entry.title}</span>
+      <div class="phone-card-header" style="padding: 6px; display: flex; flex-direction: column; gap: 4px;">
+        <span class="phone-card-title" style="font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${displayTitle}</span>
+        <div class="phone-card-patterns" style="display: flex; flex-wrap: wrap; gap: 2px;">
+          ${tagsHtml}
+        </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-          <span class="phone-card-date">${entry.date}</span>
-          <span class="tag-badge" style="font-size:9px; padding: 1px 4px; color: ${biasColor}; background-color: ${biasColor}1A; border: 1px solid ${biasColor}33;">${entry.bias}</span>
+          <span class="phone-card-date" style="font-size: 8px;">${entry.date}</span>
+          <span class="tag-badge" style="font-size:8px; padding: 1px 4px; color: ${biasColor}; background-color: ${biasColor}1A; border: 1px solid ${biasColor}33;">${entry.bias}</span>
         </div>
       </div>
     `;
@@ -1439,14 +1666,34 @@ function renderMobileDetail() {
   const entry = entries.find(e => e.id === activeEntryId);
   if (!entry) return;
 
-  // Chart Screenshot Top positioning setup
-  document.getElementById('mobile-detail-chart-img').src = entry.image;
-  document.getElementById('mobile-detail-title').value = entry.title;
-  document.getElementById('mobile-detail-notes').value = entry.notes;
-  document.getElementById('mobile-detail-mistakes').value = entry.mistakes;
+  const imgs = entry.images || [];
+  const mainImgEl = document.getElementById('mobile-detail-chart-img');
+  const mainWrapper = document.getElementById('mobile-main-image-wrapper');
+  const deleteBtn = mainWrapper ? mainWrapper.querySelector('.delete-current-image-btn') : null;
+
+  if (mainImgEl) {
+    if (imgs.length > 0) {
+      mainImgEl.src = imgs[activeImageIndex];
+      mainImgEl.style.display = 'block';
+      if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
+      if (deleteBtn) deleteBtn.style.display = 'flex';
+    } else {
+      mainImgEl.src = '';
+      mainImgEl.style.display = 'none';
+      if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
+      if (deleteBtn) deleteBtn.style.display = 'none';
+    }
+  }
+
+  // Render dynamic thumbnail strip for mobile
+  renderThumbnailStrip(entry, 'mobile');
+
+  document.getElementById('mobile-detail-title').value = entry.title || '';
+  document.getElementById('mobile-detail-notes').value = entry.notes || '';
+  document.getElementById('mobile-detail-mistakes').value = entry.mistakes || '';
 
   // Header title sync
-  document.getElementById('mobile-detail-title-header').textContent = entry.title;
+  document.getElementById('mobile-detail-title-header').textContent = entry.title || 'Untitled Setup';
 
   // Render Mobile attributes list
   const attrList = document.getElementById('mobile-detail-attributes-list');
@@ -1509,11 +1756,12 @@ function renderMobileDetail() {
 }
 
 // Mobile Calendar View
+// Mobile Calendar View
 function renderMobileCalendar() {
   const container = document.getElementById('mobile-calendar-view');
   if (!container) return;
   container.innerHTML = '';
-  const calendarHtml = generateCalendarHTML(2026, 4); // May 2026
+  const calendarHtml = generateCalendarHTML(currentCalendarYear, currentCalendarMonth);
   container.innerHTML = calendarHtml;
 }
 
@@ -1599,6 +1847,7 @@ function renderMobileDashboard() {
   const totalTrades = entries.length;
   const passedTrades = entries.filter(e => e.status === 'PASSED').length;
   const winRate = totalTrades > 0 ? ((passedTrades / totalTrades) * 100).toFixed(0) : 0;
+  const statsObj = calculatePatternStats();
 
   container.innerHTML = `
     <div class="stats-grid" style="grid-template-columns: 1fr; gap: 8px; padding: 12px;">
@@ -1614,15 +1863,11 @@ function renderMobileDashboard() {
     <div class="stat-list" style="padding:12px; gap:6px;">
       <div class="stat-list-item" style="padding:8px 12px; font-size:11px;">
         <span class="stat-list-label">Most Profitable</span>
-        <span class="stat-list-val" style="color:var(--color-bull);">VWAP Support (+₹800)</span>
+        <span class="stat-list-val" style="color:var(--color-bull);">${statsObj.bestPattern}</span>
       </div>
       <div class="stat-list-item" style="padding:8px 12px; font-size:11px;">
         <span class="stat-list-label">Worst Performing</span>
-        <span class="stat-list-val" style="color:var(--color-bear);">VWAP Rejection (-₹250)</span>
-      </div>
-      <div class="stat-list-item" style="padding:8px 12px; font-size:11px;">
-        <span class="stat-list-label">Syncthing Connection</span>
-        <span class="stat-list-val" style="color:var(--color-bull);"><i class="fa-solid fa-rotate"></i> Active</span>
+        <span class="stat-list-val" style="color:var(--color-bear);">${statsObj.worstPattern}</span>
       </div>
     </div>
   `;
@@ -1647,16 +1892,11 @@ function renderMobileMore() {
       </div>
       
       <button class="btn-secondary" style="font-size:10px; padding:4px 8px; margin-top:4px;" onclick="chooseStorageFolder()">Change Folder</button>
-
-      <div style="font-size:11px; color:var(--color-bull); font-weight:600; margin-top:8px; border-top:1px solid var(--border-color); padding-top:8px;">
-        <i class="fa-solid fa-rotate-right"></i> Synced by Syncthing
-      </div>
     </div>
 
     <div class="settings-card" style="padding:12px; gap:8px; margin-top:12px;">
       <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Local Actions</span>
       <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px;" onclick="clearDatabase()">Reset Demo Entries</button>
-      <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px; margin-top:4px;" onclick="alert('Exported SQLite database schema mock (database.db)')">Backup db file</button>
     </div>
   `;
 }
