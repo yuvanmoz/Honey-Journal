@@ -1,3 +1,15 @@
+// Tauri v1/v2 compatibility helper
+function getTauriInvoke() {
+  if (window.__TAURI__) {
+    if (window.__TAURI__.core && window.__TAURI__.core.invoke) {
+      return window.__TAURI__.core.invoke;
+    } else if (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+      return window.__TAURI__.tauri.invoke;
+    }
+  }
+  return null;
+}
+
 // State variables
 let entries = [];
 let tags = [];
@@ -99,7 +111,7 @@ async function chooseStorageFolder() {
   
   if (window.__TAURI__) {
     // Open native folder dialog using Rust pick_folder command
-    const { invoke } = window.__TAURI__.tauri;
+    const invoke = getTauriInvoke();
     try {
       const selected = await invoke('select_folder');
       if (selected) {
@@ -140,7 +152,7 @@ async function loadDatabase() {
   const seeds = window.HoneyJournalSeeds;
 
   if (window.__TAURI__ && storagePath) {
-    const { invoke } = window.__TAURI__.tauri;
+    const invoke = getTauriInvoke();
     try {
       // Create entries directory if not exists using native command
       await invoke('fs_create_dir', { path: `${storagePath}\\entries` });
@@ -270,7 +282,7 @@ async function saveDatabase(specificEntry = null, saveAll = false) {
 
 async function saveTagsToDisk() {
   if (!window.__TAURI__ || !storagePath) return;
-  const { invoke } = window.__TAURI__.tauri;
+  const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
     path: `${storagePath}\\tags.json`,
     content: JSON.stringify(tags, null, 2)
@@ -281,7 +293,7 @@ async function saveTagsToDisk() {
 
 async function saveAttributesToDisk() {
   if (!window.__TAURI__ || !storagePath) return;
-  const { invoke } = window.__TAURI__.tauri;
+  const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
     path: `${storagePath}\\attributes.json`,
     content: JSON.stringify(customAttributes, null, 2)
@@ -292,7 +304,7 @@ async function saveAttributesToDisk() {
 
 async function saveEntryToDisk(entry) {
   if (!window.__TAURI__ || !storagePath) return;
-  const { invoke } = window.__TAURI__.tauri;
+  const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
     path: `${storagePath}\\entries\\entry-${entry.id}.json`,
     content: JSON.stringify(entry, null, 2)
@@ -303,7 +315,7 @@ async function saveEntryToDisk(entry) {
 
 async function removeEntryFromDisk(entryId) {
   if (!window.__TAURI__ || !storagePath) return;
-  const { invoke } = window.__TAURI__.tauri;
+  const invoke = getTauriInvoke();
   await invoke('fs_remove_file', {
     path: `${storagePath}\\entries\\entry-${entryId}.json`
   }).catch(err => {
