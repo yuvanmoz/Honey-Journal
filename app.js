@@ -25,12 +25,12 @@ let desktopSearchText = '';
 let mobileSearchText = '';
 
 // Initialization
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   // Sync Clock
   initPhoneClock();
   
   // Check storage path setup on launch
-  checkStorageFolderSetup();
+  await checkStorageFolderSetup();
 
   // Load Theme
   initTheme();
@@ -71,7 +71,7 @@ function initPhoneClock() {
 }
 
 // First-Run Directory Manager
-function checkStorageFolderSetup() {
+async function checkStorageFolderSetup() {
   const savedPath = localStorage.getItem('honey_journal_storage_path');
   const setupOverlay = document.getElementById('setup-screen');
   
@@ -80,7 +80,7 @@ function checkStorageFolderSetup() {
     if (setupOverlay) setupOverlay.style.display = 'none';
     
     // Load Database & Render
-    loadDatabase();
+    await loadDatabase();
     renderAll();
   } else {
     // Show First-Run Directory Pick overlay
@@ -118,7 +118,7 @@ function mockFolderPrompt() {
   }
 }
 
-function setStoragePath(path) {
+async function setStoragePath(path) {
   storagePath = path;
   localStorage.setItem('honey_journal_storage_path', path);
   
@@ -126,17 +126,82 @@ function setStoragePath(path) {
   if (setupOverlay) setupOverlay.style.display = 'none';
   
   // Reload and draw UI
-  loadDatabase();
+  await loadDatabase();
   renderAll();
 }
 
 // Database Operations
-function loadDatabase() {
+// Database Operations
+async function loadDatabase() {
+  const seeds = window.HoneyJournalSeeds;
+
+  if (window.__TAURI__ && storagePath) {
+    const { readTextFile, readDir, createDir } = window.__TAURI__.fs;
+    try {
+      // Create entries directory if not exists
+      await createDir(`${storagePath}\\entries`, { recursive: true }).catch(() => {});
+
+      // Load tags.json
+      try {
+        const tagsContent = await readTextFile(`${storagePath}\\tags.json`);
+        tags = JSON.parse(tagsContent);
+      } catch (err) {
+        console.log("No tags.json found, loading seeds...");
+        tags = seeds.initialTags;
+        await saveTagsToDisk();
+      }
+
+      // Load attributes.json
+      try {
+        const attrsContent = await readTextFile(`${storagePath}\\attributes.json`);
+        customAttributes = JSON.parse(attrsContent);
+      } catch (err) {
+        console.log("No attributes.json found, loading seeds...");
+        customAttributes = seeds.defaultCustomAttributes;
+        await saveAttributesToDisk();
+      }
+
+      // Load all files from entries directory
+      try {
+        const files = await readDir(`${storagePath}\\entries`);
+        const tempEntries = [];
+        for (const file of files) {
+          if (file.name.endsWith('.json')) {
+            try {
+              const entryContent = await readTextFile(file.path);
+              tempEntries.push(JSON.parse(entryContent));
+            } catch (e) {
+              console.error("Error reading entry file:", file.path, e);
+            }
+          }
+        }
+        
+        // If directory has entries, use them; otherwise, start empty
+        if (tempEntries.length > 0) {
+          entries = tempEntries;
+        } else {
+          console.log("Empty folder, starting with empty journal entries.");
+          entries = []; 
+        }
+      } catch (err) {
+        console.error("Error reading entries directory:", err);
+        entries = [];
+      }
+      
+      // Save local cache backup
+      localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+      localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+      localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+      return;
+    } catch (err) {
+      console.error("Tauri load error, falling back to localStorage:", err);
+    }
+  }
+
+  // Fallback to localStorage (Web/Mockup mode)
   const localEntries = localStorage.getItem('honey_journal_entries');
   const localTags = localStorage.getItem('honey_journal_tags');
   const localCustomAttrs = localStorage.getItem('honey_journal_custom_attrs');
-
-  const seeds = window.HoneyJournalSeeds;
 
   if (localEntries) {
     entries = JSON.parse(localEntries);
@@ -160,10 +225,50 @@ function loadDatabase() {
   }
 }
 
-function saveDatabase() {
+async function saveDatabase() {
   localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
   localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
   localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+
+  if (window.__TAURI__ && storagePath) {
+    await saveTagsToDisk();
+    await saveAttributesToDisk();
+    for (const entry of entries) {
+      await saveEntryToDisk(entry);
+    }
+  }
+}
+
+async function saveTagsToDisk() {
+  if (!window.__TAURI__ || !storagePath) return;
+  const { writeTextFile } = window.__TAURI__.fs;
+  await writeTextFile(`${storagePath}\\tags.json`, JSON.stringify(tags, null, 2)).catch(err => {
+    console.error("Failed to save tags.json:", err);
+  });
+}
+
+async function saveAttributesToDisk() {
+  if (!window.__TAURI__ || !storagePath) return;
+  const { writeTextFile } = window.__TAURI__.fs;
+  await writeTextFile(`${storagePath}\\attributes.json`, JSON.stringify(customAttributes, null, 2)).catch(err => {
+    console.error("Failed to save attributes.json:", err);
+  });
+}
+
+async function saveEntryToDisk(entry) {
+  if (!window.__TAURI__ || !storagePath) return;
+  const { writeTextFile } = window.__TAURI__.fs;
+  await writeTextFile(`${storagePath}\\entries\\entry-${entry.id}.json`, JSON.stringify(entry, null, 2)).catch(err => {
+    console.error(`Failed to save entry ${entry.id}:`, err);
+  });
+}
+
+async function removeEntryFromDisk(entryId) {
+  if (!window.__TAURI__ || !storagePath) return;
+  const { removeFile } = window.__TAURI__.fs;
+  await removeFile(`${storagePath}\\entries\\entry-${entryId}.json`).catch(err => {
+    console.error(`Failed to delete entry ${entryId}:`, err);
+  });
 }
 
 // Theme Controls
@@ -614,6 +719,27 @@ function generateCalendarHTML(year, monthIndex) {
       ${cellsHtml}
     </div>
   `;
+}
+
+// Calendar click handler to filter setups
+function handleCalendarDateClick(dateString) {
+  if (activeCalendarDate === dateString) {
+    activeCalendarDate = null; // Toggle off if clicked again
+  } else {
+    activeCalendarDate = dateString; // Filter setups by this date
+  }
+  
+  // Re-render calendars
+  if (currentDesktopView === 'calendar') {
+    renderDesktopCalendar();
+  }
+  if (currentMobileView === 'calendar') {
+    renderMobileCalendar();
+  }
+  
+  // Switch to patterns page to display setups logged for that date
+  switchDesktopView('patterns');
+  switchMobileView('patterns');
 }
 
 // Stats & Dashboard
@@ -1127,8 +1253,12 @@ function deleteActiveEntry() {
   if (!activeEntryId) return;
   
   if (confirm("Are you sure you want to delete this trading journal entry?")) {
-    entries = entries.filter(e => e.id !== activeEntryId);
+    const deletedId = activeEntryId;
+    entries = entries.filter(e => e.id !== deletedId);
     saveDatabase();
+    if (window.__TAURI__ && storagePath) {
+      removeEntryFromDisk(deletedId);
+    }
     closeDesktopDetail();
     closeMobileDetail();
     renderAll();
