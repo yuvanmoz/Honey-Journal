@@ -136,7 +136,6 @@ async function setStoragePath(path) {
 }
 
 // Database Operations
-// Database Operations
 async function loadDatabase() {
   const seeds = window.HoneyJournalSeeds;
 
@@ -456,6 +455,11 @@ function switchDesktopView(view) {
   statsView.style.display = 'none';
   settingsView.style.display = 'none';
 
+  // Close calendar drawer when leaving calendar view
+  if (view !== 'calendar') {
+    closeCalendarDrawer();
+  }
+
   titleEl.textContent = view.charAt(0).toUpperCase() + view.slice(1);
 
   if (view === 'patterns') {
@@ -563,13 +567,13 @@ function getProcessedEntries(searchText, calendarDate = null) {
     list = list.filter(e => e.patterns.includes(filterPattern));
   }
 
-  // Apply Search input matching
+  // Apply Search input matching (search patterns, notes, mistakes, bias)
   if (searchText) {
     list = list.filter(e => 
-      e.title.toLowerCase().includes(searchText) || 
-      e.notes.toLowerCase().includes(searchText) ||
-      e.mistakes.toLowerCase().includes(searchText) ||
-      e.bias.toLowerCase().includes(searchText)
+      (e.patterns && e.patterns.join(' ').toLowerCase().includes(searchText)) ||
+      (e.notes && e.notes.toLowerCase().includes(searchText)) ||
+      (e.mistakes && e.mistakes.toLowerCase().includes(searchText)) ||
+      (e.bias && e.bias.toLowerCase().includes(searchText))
     );
   }
 
@@ -597,13 +601,25 @@ function renderDesktopContent() {
   }
 }
 
+// Helper to build display name from patterns (no title field)
+function getDisplayName(entry) {
+  if (entry.patterns && entry.patterns.length > 0) {
+    return entry.patterns.join(' · ');
+  }
+  return 'Untitled Setup';
+}
+
 function renderDesktopGallery(list) {
   const container = document.getElementById('desktop-gallery-view');
   if (!container) return;
   container.innerHTML = '';
 
   if (list.length === 0) {
-    container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">No entries found matching filters.</div>`;
+    container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted);">
+      <i class="fa-solid fa-inbox" style="font-size: 32px; margin-bottom: 12px; display: block; opacity: 0.4;"></i>
+      <div style="font-size: 14px; margin-bottom: 4px;">No setups found</div>
+      <div style="font-size: 12px; opacity: 0.7;">Click <strong>+ New</strong> to create your first setup</div>
+    </div>`;
     return;
   }
 
@@ -617,40 +633,50 @@ function renderDesktopGallery(list) {
     else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
     else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
 
-    let displayTitle = entry.title ? entry.title.trim() : '';
-    if (!displayTitle) {
-      if (entry.patterns && entry.patterns.length > 0) {
-        displayTitle = entry.patterns.join(', ');
-      } else {
-        displayTitle = "Untitled Setup";
-      }
-    }
+    const displayTitle = getDisplayName(entry);
 
     let tagsHtml = '';
     if (entry.patterns && entry.patterns.length > 0) {
       entry.patterns.forEach(pat => {
         const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-secondary)', bg: 'var(--bg-tertiary)' };
-        tagsHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg}; margin-right: 4px; font-size: 10px; padding: 1px 6px;">${pat}</span>`;
+        tagsHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg};">${pat}</span>`;
       });
     }
 
-    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : 'Images/chart1.png';
+    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+    const hasImage = firstImage !== '';
+
+    const imgHtml = hasImage 
+      ? `<img src="${firstImage}" alt="${displayTitle}" class="card-img">`
+      : `<div class="card-img-empty"><i class="fa-solid fa-chart-line"></i></div>`;
+
+    // Format P&L display
+    const plVal = entry.customAttributes ? entry.customAttributes['P&L'] : null;
+    let plDisplay = '';
+    if (plVal !== null && plVal !== undefined && plVal !== '' && plVal !== 0) {
+      const numPl = typeof plVal === 'number' ? plVal : parsePL(String(plVal));
+      if (numPl !== 0) {
+        const plColor = numPl > 0 ? 'var(--color-bull)' : 'var(--color-bear)';
+        plDisplay = `<span style="font-family: var(--font-display); font-weight: 700; font-size: 12px; color: ${plColor};">${numPl > 0 ? '+' : ''}₹${numPl}</span>`;
+      }
+    }
 
     card.innerHTML = `
       <div class="card-img-wrapper">
-        <img src="${firstImage}" alt="${displayTitle}" class="card-img">
+        ${imgHtml}
       </div>
-      <div class="card-content" style="display: flex; flex-direction: column; gap: 8px;">
-        <div class="card-title" style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${displayTitle}</div>
-        <div class="card-patterns" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
-          ${tagsHtml}
+      <div class="card-content">
+        <div class="card-patterns" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
+          ${tagsHtml || `<span style="color: var(--text-muted); font-size: 11px;">No patterns</span>`}
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
-          <div class="card-footer-left" style="font-size:11px; color:var(--text-secondary);">
-            <i class="fa-solid fa-calendar" style="margin-right:4px;"></i>
-            <span>${entry.date}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size:11px; color:var(--text-muted);">
+              <i class="fa-solid fa-calendar" style="margin-right:3px;"></i>${entry.date}
+            </span>
+            ${plDisplay}
           </div>
-          <span class="tag-badge" style="background-color: ${biasColor}1A; color: ${biasColor}; border: 1px solid ${biasColor}33;">${entry.bias}</span>
+          <span class="tag-badge" style="background-color: ${biasColor}1A; color: ${biasColor}; border: 1px solid ${biasColor}33; font-size: 10px;">${entry.bias}</span>
         </div>
       </div>
     `;
@@ -664,7 +690,7 @@ function renderDesktopTable(list) {
   tbody.innerHTML = '';
 
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">No entries found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No entries found.</td></tr>`;
     return;
   }
 
@@ -681,34 +707,27 @@ function renderDesktopTable(list) {
     tr.onclick = () => openEntryDetail(entry.id);
     if (activeEntryId === entry.id) tr.style.backgroundColor = 'var(--bg-primary)';
 
-    let displayTitle = entry.title ? entry.title.trim() : '';
-    if (!displayTitle) {
-      if (entry.patterns && entry.patterns.length > 0) {
-        displayTitle = entry.patterns.join(', ');
-      } else {
-        displayTitle = "Untitled Setup";
-      }
-    }
-
     let tagsHtml = '';
     entry.patterns.forEach(pat => {
       const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-muted)', bg: 'var(--bg-tertiary)' };
       tagsHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg}; margin-right: 4px;">${pat}</span>`;
     });
 
-    const pl = entry.customAttributes['P&L'] || '₹0';
+    // Numeric P&L handling
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plNum = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
     let plColor = 'inherit';
-    if (pl.startsWith('-')) plColor = 'var(--color-bear)';
-    else if (pl !== '₹0') plColor = 'var(--color-bull)';
+    if (plNum < 0) plColor = 'var(--color-bear)';
+    else if (plNum > 0) plColor = 'var(--color-bull)';
+    const plDisplay = plNum !== 0 ? `${plNum > 0 ? '+' : ''}₹${plNum}` : '₹0';
 
-    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : 'Images/chart1.png';
+    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
 
     tr.innerHTML = `
-      <td><img src="${firstImage}" class="table-img"></td>
-      <td style="font-weight:600;">${displayTitle}</td>
+      <td>${firstImage ? `<img src="${firstImage}" class="table-img">` : `<div class="table-img" style="background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-chart-line" style="color:var(--text-muted); font-size:12px;"></i></div>`}</td>
+      <td>${tagsHtml || '<span style="color:var(--text-muted);">No patterns</span>'}</td>
       <td><span class="tag-badge" style="background-color: var(--bg-tertiary);">${entry.bias}</span></td>
-      <td>${tagsHtml}</td>
-      <td style="font-family: var(--font-display); font-weight:600; color: ${plColor};">${pl}</td>
+      <td style="font-family: var(--font-display); font-weight:600; color: ${plColor};">${plDisplay}</td>
       <td class="status-${entry.status.toLowerCase()}">${entry.status}</td>
       <td style="color: var(--text-secondary);">${entry.date}</td>
     `;
@@ -781,27 +800,19 @@ function generateCalendarHTML(year, monthIndex) {
     let dotsHtml = '';
     dayEntries.forEach(entry => {
       const statusClass = entry.status === 'PASSED' ? 'passed' : 'failed';
-      // Find display title
-      let displayTitle = entry.title ? entry.title.trim() : '';
-      if (!displayTitle) {
-        if (entry.patterns && entry.patterns.length > 0) {
-          displayTitle = entry.patterns.join(', ');
-        } else {
-          displayTitle = "Untitled Setup";
-        }
-      }
+      const displayTitle = getDisplayName(entry);
       dotsHtml += `<span class="calendar-trade-dot ${statusClass}" title="${displayTitle} (${entry.bias})"></span>`;
     });
 
     const isToday = (day === todayObj.getDate() && monthIndex === todayObj.getMonth() && year === todayObj.getFullYear()) 
-      ? 'style="border-color: var(--accent-gold); border-width: 2px;"' 
+      ? 'today' 
       : '';
-    const isSelected = activeCalendarDate === dateString ? 'style="border-color: var(--accent-olive); background-color: var(--accent-olive-light);"' : '';
+    const isSelected = activeCalendarDate === dateString ? 'selected' : '';
 
     cellsHtml += `
-      <div class="calendar-day-cell" ${isToday || isSelected} onclick="handleCalendarDateClick('${dateString}')">
+      <div class="calendar-day-cell ${isToday} ${isSelected}" onclick="handleCalendarDateClick('${dateString}')">
         <span class="calendar-day-number">${day}</span>
-        <div style="display: flex; gap: 4px; margin-top: 4px;">
+        <div style="display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap;">
           ${dotsHtml}
         </div>
       </div>
@@ -825,25 +836,117 @@ function generateCalendarHTML(year, monthIndex) {
   `;
 }
 
-// Calendar click handler to filter setups
+// Calendar click handler - opens date drawer panel instead of navigating
 function handleCalendarDateClick(dateString) {
   if (activeCalendarDate === dateString) {
-    activeCalendarDate = null; // Toggle off if clicked again
+    // Toggle off if same date clicked
+    activeCalendarDate = null;
+    closeCalendarDrawer();
   } else {
-    activeCalendarDate = dateString; // Filter setups by this date
+    activeCalendarDate = dateString;
+    openCalendarDrawer(dateString);
   }
   
-  // Re-render calendars
+  // Re-render calendars to highlight selected cell
   if (currentDesktopView === 'calendar') {
     renderDesktopCalendar();
   }
   if (currentMobileView === 'calendar') {
     renderMobileCalendar();
   }
+}
+
+// Calendar Drawer Panel Logic
+function openCalendarDrawer(dateString) {
+  const dateObj = new Date(dateString + 'T00:00:00');
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const formattedDate = `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
+
+  const dayEntries = entries.filter(e => e.date === dateString);
+
+  // Helper to build list of setup cards
+  function buildDrawerBodyHtml() {
+    if (dayEntries.length === 0) {
+      return `
+        <div class="calendar-drawer-empty">
+          <i class="fa-solid fa-calendar-xmark" style="font-size: 24px; margin-bottom: 10px; display: block; opacity: 0.5;"></i>
+          No setups recorded for this date.
+        </div>`;
+    }
+    
+    let html = '';
+    dayEntries.forEach(entry => {
+      let biasColor = 'var(--color-neutral)';
+      if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
+      else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
+      else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
+
+      let tagsHtml = '';
+      if (entry.patterns && entry.patterns.length > 0) {
+        entry.patterns.forEach(pat => {
+          const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-secondary)', bg: 'var(--bg-tertiary)' };
+          tagsHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg}; font-size: 10px;">${pat}</span>`;
+        });
+      }
+
+      const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+      const imgHtml = firstImage 
+        ? `<img src="${firstImage}" class="drawer-setup-img">`
+        : `<div class="drawer-setup-img" style="display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary);"><i class="fa-solid fa-chart-line" style="color:var(--text-muted); font-size:14px;"></i></div>`;
+
+      html += `
+        <div class="drawer-setup-card" onclick="openEntryDetail('${entry.id}')">
+          ${imgHtml}
+          <div class="drawer-setup-info">
+            <div class="drawer-setup-patterns">${tagsHtml || '<span style="color: var(--text-muted); font-size: 11px;">No patterns</span>'}</div>
+            <div class="drawer-setup-meta">
+              <span class="tag-badge" style="font-size: 9px; padding: 1px 6px; background-color: ${biasColor}1A; color: ${biasColor};">${entry.bias}</span>
+              <span class="status-${entry.status.toLowerCase()}" style="font-size: 10px;">${entry.status}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    return html;
+  }
+
+  const drawerBodyHtml = buildDrawerBodyHtml();
+
+  // Desktop Drawer
+  const desktopDrawer = document.getElementById('desktop-calendar-drawer');
+  if (desktopDrawer) {
+    document.getElementById('calendar-drawer-date-title').textContent = formattedDate;
+    document.getElementById('calendar-drawer-count').textContent = `${dayEntries.length} Setup${dayEntries.length !== 1 ? 's' : ''}`;
+    document.getElementById('calendar-drawer-body').innerHTML = drawerBodyHtml;
+    desktopDrawer.classList.add('open');
+  }
+
+  // Mobile Drawer
+  const mobileDrawer = document.getElementById('mobile-calendar-drawer');
+  if (mobileDrawer) {
+    document.getElementById('mobile-calendar-drawer-date-title').textContent = formattedDate;
+    document.getElementById('mobile-calendar-drawer-count').textContent = `${dayEntries.length} Setup${dayEntries.length !== 1 ? 's' : ''}`;
+    document.getElementById('mobile-calendar-drawer-body').innerHTML = drawerBodyHtml;
+    mobileDrawer.classList.add('open');
+  }
+}
+
+function closeCalendarDrawer() {
+  const desktopDrawer = document.getElementById('desktop-calendar-drawer');
+  if (desktopDrawer) desktopDrawer.classList.remove('open');
   
-  // Switch to patterns page to display setups logged for that date
-  switchDesktopView('patterns');
-  switchMobileView('patterns');
+  const mobileDrawer = document.getElementById('mobile-calendar-drawer');
+  if (mobileDrawer) mobileDrawer.classList.remove('open');
+
+  activeCalendarDate = null;
+}
+
+function closeMobileCalendarDrawer() {
+  closeCalendarDrawer();
+  // Re-render mobile calendar to remove date highlighting
+  if (currentMobileView === 'calendar') {
+    renderMobileCalendar();
+  }
 }
 
 function parsePL(plStr) {
@@ -862,7 +965,8 @@ function calculatePatternStats() {
   const patternCount = {};
 
   entries.forEach(entry => {
-    const plValue = parsePL(entry.customAttributes['P&L']);
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
     const entryPatterns = entry.patterns || [];
     
     entryPatterns.forEach(pat => {
@@ -1063,26 +1167,22 @@ function renderDesktopDetail() {
   const imgs = entry.images || [];
   const mainImgEl = document.getElementById('detail-chart-img');
   const mainWrapper = document.getElementById('desktop-main-image-wrapper');
-  const deleteBtn = mainWrapper ? mainWrapper.querySelector('.delete-current-image-btn') : null;
 
   if (mainImgEl) {
     if (imgs.length > 0) {
       mainImgEl.src = imgs[activeImageIndex];
       mainImgEl.style.display = 'block';
       if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
-      if (deleteBtn) deleteBtn.style.display = 'flex';
     } else {
       mainImgEl.src = '';
       mainImgEl.style.display = 'none';
       if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
-      if (deleteBtn) deleteBtn.style.display = 'none';
     }
   }
 
   // Render dynamic thumbnail strip
   renderThumbnailStrip(entry, 'desktop');
 
-  document.getElementById('detail-title').value = entry.title || '';
   document.getElementById('detail-notes').value = entry.notes || '';
   document.getElementById('detail-mistakes').value = entry.mistakes || '';
 
@@ -1090,12 +1190,21 @@ function renderDesktopDetail() {
   const attrList = document.getElementById('detail-attributes-list');
   attrList.innerHTML = '';
 
-  // Bias
-  const biasRow = createAttributeRowHTML('Bias', `<select class="input-select" onchange="saveCurrentField('bias', this.value)">
-    <option value="Bullish" ${entry.bias === 'Bullish' ? 'selected' : ''}>Bullish</option>
-    <option value="Bearish" ${entry.bias === 'Bearish' ? 'selected' : ''}>Bearish</option>
-    <option value="Both" ${entry.bias === 'Both' ? 'selected' : ''}>Both</option>
-  </select>`, 'fa-solid fa-arrows-up-down');
+  // Bias - color chips instead of dropdown
+  const biasChipsHTML = `
+    <div class="bias-chips-container">
+      <div class="bias-chip ${entry.bias === 'Bullish' ? 'active-bull' : ''}" onclick="saveCurrentField('bias', 'Bullish'); renderAll();">
+        <span class="bias-chip-dot" style="background: var(--color-bull);"></span> Bullish
+      </div>
+      <div class="bias-chip ${entry.bias === 'Bearish' ? 'active-bear' : ''}" onclick="saveCurrentField('bias', 'Bearish'); renderAll();">
+        <span class="bias-chip-dot" style="background: var(--color-bear);"></span> Bearish
+      </div>
+      <div class="bias-chip ${entry.bias === 'Both' ? 'active-both' : ''}" onclick="saveCurrentField('bias', 'Both'); renderAll();">
+        <span class="bias-chip-dot" style="background: var(--color-both);"></span> Both
+      </div>
+    </div>
+  `;
+  const biasRow = createAttributeRowHTML('Bias', biasChipsHTML, 'fa-solid fa-arrows-up-down');
   attrList.appendChild(biasRow);
 
   // Date
@@ -1114,7 +1223,7 @@ function renderDesktopDetail() {
   </select>`, 'fa-solid fa-circle-check');
   attrList.appendChild(statusRow);
 
-  // Secondary Custom Attributes (Market, P&L, plus new additions with trash bins)
+  // Secondary Custom Attributes (Market, P&L as number, plus new additions with trash bins)
   customAttributes.forEach(attr => {
     let inputHTML = '';
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
@@ -1128,6 +1237,9 @@ function renderDesktopDetail() {
           <option value="Gold">
           <option value="Crude Oil">
         </datalist>`;
+    } else if (attr.name === 'P&L') {
+      // P&L is always numeric
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('P&L', Number(this.value))">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
@@ -1135,9 +1247,9 @@ function renderDesktopDetail() {
       });
       inputHTML = `<select class="input-select" onchange="saveCustomAttribute('${attr.name}', this.value)">${optionsHtml}</select>`;
     } else if (attr.type === 'number') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="Optional" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('${attr.name}', Number(this.value))">`;
     } else {
-      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="e.g. ₹350" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
     }
 
     const isSystemAttribute = (attr.name === 'Market' || attr.name === 'P&L');
@@ -1153,8 +1265,10 @@ function renderDesktopDetail() {
   attrList.appendChild(addBtn);
 
   // Setup timestamps
-  document.getElementById('detail-created-time').textContent = `Created: Apr 27, 2026 09:45 AM`;
-  document.getElementById('detail-updated-time').textContent = `Updated: Jun 02, 2026 12:30 PM`;
+  const createdDate = entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Unknown';
+  const updatedDate = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : 'Unknown';
+  document.getElementById('detail-created-time').textContent = `Created: ${createdDate}`;
+  document.getElementById('detail-updated-time').textContent = `Updated: ${updatedDate}`;
 }
 
 function createAttributeRowHTML(label, innerHTML, iconClass, isCustom = false) {
@@ -1202,7 +1316,7 @@ function generateTagMultiSelectHTML(selectedPatterns) {
       </div>
       <div class="tag-multiselect-dropdown">
         ${dropdownItemsHtml}
-        <button class="tag-create-btn" onclick="openAddTagDialog()"><i class="fa-solid fa-plus"></i> Add New Tag</button>
+        <button class="tag-create-btn" onclick="openAddTagDialog()"><i class="fa-solid fa-plus"></i> Add New Pattern</button>
       </div>
     </div>
   `;
@@ -1233,6 +1347,7 @@ function saveCurrentField(field, val) {
   if (!entry) return;
 
   entry[field] = val;
+  entry.updatedAt = new Date().toISOString();
   saveDatabase();
   
   // Re-render grids
@@ -1252,6 +1367,7 @@ function saveCustomAttribute(attrName, val) {
   if (!entry) return;
 
   entry.customAttributes[attrName] = val;
+  entry.updatedAt = new Date().toISOString();
   saveDatabase();
 
   renderAll();
@@ -1294,7 +1410,8 @@ function submitAddAttribute() {
     options.unshift("");
   }
 
-  const newAttr = { name, type, options, defaultValue: type === 'select' ? options[0] : '' };
+  const defaultValue = type === 'number' ? 0 : (type === 'select' ? options[0] : '');
+  const newAttr = { name, type, options, defaultValue };
   customAttributes.push(newAttr);
   saveDatabase();
 
@@ -1325,8 +1442,17 @@ function deleteCustomAttributeField(attrName) {
   }
 }
 
-// Custom tags
+// Custom tags - uses bias chips now
 function openAddTagDialog() {
+  // Reset bias chips to default (Bullish)
+  const chipsGroup = document.getElementById('bias-chips-group');
+  if (chipsGroup) {
+    chipsGroup.querySelectorAll('.bias-chip').forEach(c => {
+      c.classList.remove('active-bull', 'active-bear', 'active-both');
+    });
+    const firstChip = chipsGroup.querySelector('[data-bias="Bullish"]');
+    if (firstChip) firstChip.classList.add('active-bull');
+  }
   document.getElementById('dialog-add-tag').classList.add('open');
 }
 
@@ -1334,15 +1460,32 @@ function closeAddTagDialog() {
   document.getElementById('dialog-add-tag').classList.remove('open');
 }
 
+// Bias chip selection handler
+function selectBiasChip(chipEl) {
+  const container = chipEl.closest('.bias-chips-container');
+  container.querySelectorAll('.bias-chip').forEach(c => {
+    c.classList.remove('active-bull', 'active-bear', 'active-both');
+  });
+  const bias = chipEl.dataset.bias;
+  if (bias === 'Bullish') chipEl.classList.add('active-bull');
+  else if (bias === 'Bearish') chipEl.classList.add('active-bear');
+  else chipEl.classList.add('active-both');
+}
+
 function submitAddTag() {
   const nameEl = document.getElementById('new-tag-name');
-  const biasEl = document.getElementById('new-tag-bias-group');
+  // Get selected bias from chips
+  const chipsGroup = document.getElementById('bias-chips-group');
+  let biasGroup = 'Bullish';
+  const activeChip = chipsGroup.querySelector('.active-bull, .active-bear, .active-both');
+  if (activeChip) {
+    biasGroup = activeChip.dataset.bias;
+  }
 
   const name = nameEl.value.trim();
-  const biasGroup = biasEl.value;
 
   if (!name) {
-    alert("Tag name is required!");
+    alert("Pattern name is required!");
     return;
   }
 
@@ -1385,10 +1528,10 @@ function toggleBookmark(id) {
 function createNewEntry() {
   const newId = 'entry-' + Date.now();
   const today = new Date().toISOString().split('T')[0];
+  const now = new Date().toISOString();
 
   const newEntry = {
     id: newId,
-    title: "",
     bias: "Bullish",
     date: today,
     patterns: [],
@@ -1397,12 +1540,14 @@ function createNewEntry() {
     notes: "",
     mistakes: "",
     customAttributes: {},
-    bookmarked: false
+    bookmarked: false,
+    createdAt: now,
+    updatedAt: now
   };
 
   // Populate custom fields defaults
   customAttributes.forEach(attr => {
-    newEntry.customAttributes[attr.name] = attr.defaultValue || '';
+    newEntry.customAttributes[attr.name] = attr.defaultValue !== undefined ? attr.defaultValue : '';
   });
 
   entries.push(newEntry);
@@ -1444,6 +1589,7 @@ function handleImageFileSelect(input, platform) {
       if (!entry.images) entry.images = [];
       entry.images.push(e.target.result);
       activeImageIndex = entry.images.length - 1; // set new image as active
+      entry.updatedAt = new Date().toISOString();
       saveDatabase(entry);
       renderAll();
     }
@@ -1456,14 +1602,27 @@ function deleteActiveImage(platform) {
   const entry = entries.find(e => e.id === activeEntryId);
   if (!entry || !entry.images || entry.images.length === 0) return;
 
-  if (confirm("Are you sure you want to delete the current screenshot?")) {
-    entry.images.splice(activeImageIndex, 1);
-    if (activeImageIndex >= entry.images.length) {
-      activeImageIndex = Math.max(0, entry.images.length - 1);
-    }
-    saveDatabase(entry);
-    renderAll();
+  entry.images.splice(activeImageIndex, 1);
+  if (activeImageIndex >= entry.images.length) {
+    activeImageIndex = Math.max(0, entry.images.length - 1);
   }
+  entry.updatedAt = new Date().toISOString();
+  saveDatabase(entry);
+  renderAll();
+}
+
+// Delete a specific image by index from thumbnail strip
+function deleteImageByIndex(index) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry || !entry.images || index < 0 || index >= entry.images.length) return;
+
+  entry.images.splice(index, 1);
+  if (activeImageIndex >= entry.images.length) {
+    activeImageIndex = Math.max(0, entry.images.length - 1);
+  }
+  entry.updatedAt = new Date().toISOString();
+  saveDatabase(entry);
+  renderAll();
 }
 
 function renderThumbnailStrip(entry, platform) {
@@ -1481,7 +1640,10 @@ function renderThumbnailStrip(entry, platform) {
       activeImageIndex = idx;
       renderAll();
     };
-    thumb.innerHTML = `<img src="${imgSrc}" class="thumbnail-img">`;
+    thumb.innerHTML = `
+      <img src="${imgSrc}" class="thumbnail-img">
+      <button class="thumb-delete" onclick="event.stopPropagation(); deleteImageByIndex(${idx});" title="Remove image"><i class="fa-solid fa-xmark"></i></button>
+    `;
     container.appendChild(thumb);
   });
 
@@ -1493,7 +1655,7 @@ function renderThumbnailStrip(entry, platform) {
 }
 
 function clearDatabase() {
-  if (confirm("Are you sure you want to reset all entries to the default demo data?")) {
+  if (confirm("Are you sure you want to reset all data? This will delete all entries, patterns, and custom attributes.")) {
     localStorage.removeItem('honey_journal_entries');
     localStorage.removeItem('honey_journal_tags');
     localStorage.removeItem('honey_journal_custom_attrs');
@@ -1542,6 +1704,10 @@ function switchMobileView(view) {
   stats.style.display = 'none';
   dashboard.style.display = 'none';
   more.style.display = 'none';
+
+  if (view !== 'calendar') {
+    closeCalendarDrawer();
+  }
 
   headerTitle.textContent = view.charAt(0).toUpperCase() + view.slice(1);
 
@@ -1613,14 +1779,7 @@ function renderMobileGallery(list) {
     else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
     else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
 
-    let displayTitle = entry.title ? entry.title.trim() : '';
-    if (!displayTitle) {
-      if (entry.patterns && entry.patterns.length > 0) {
-        displayTitle = entry.patterns.join(', ');
-      } else {
-        displayTitle = "Untitled Setup";
-      }
-    }
+    const displayTitle = getDisplayName(entry);
 
     let tagsHtml = '';
     if (entry.patterns && entry.patterns.length > 0) {
@@ -1630,16 +1789,15 @@ function renderMobileGallery(list) {
       });
     }
 
-    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : 'Images/chart1.png';
+    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
 
     card.innerHTML = `
       <div class="phone-card-img-wrapper">
-        <img src="${firstImage}" alt="${displayTitle}" class="phone-card-img">
+        ${firstImage ? `<img src="${firstImage}" alt="${displayTitle}" class="phone-card-img">` : `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary);"><i class="fa-solid fa-chart-line" style="color:var(--text-muted);"></i></div>`}
       </div>
       <div class="phone-card-header" style="padding: 6px; display: flex; flex-direction: column; gap: 4px;">
-        <span class="phone-card-title" style="font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${displayTitle}</span>
         <div class="phone-card-patterns" style="display: flex; flex-wrap: wrap; gap: 2px;">
-          ${tagsHtml}
+          ${tagsHtml || `<span style="color: var(--text-muted); font-size: 9px;">No patterns</span>`}
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
           <span class="phone-card-date" style="font-size: 8px;">${entry.date}</span>
@@ -1669,42 +1827,48 @@ function renderMobileDetail() {
   const imgs = entry.images || [];
   const mainImgEl = document.getElementById('mobile-detail-chart-img');
   const mainWrapper = document.getElementById('mobile-main-image-wrapper');
-  const deleteBtn = mainWrapper ? mainWrapper.querySelector('.delete-current-image-btn') : null;
 
   if (mainImgEl) {
     if (imgs.length > 0) {
       mainImgEl.src = imgs[activeImageIndex];
       mainImgEl.style.display = 'block';
       if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
-      if (deleteBtn) deleteBtn.style.display = 'flex';
     } else {
       mainImgEl.src = '';
       mainImgEl.style.display = 'none';
       if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
-      if (deleteBtn) deleteBtn.style.display = 'none';
     }
   }
 
   // Render dynamic thumbnail strip for mobile
   renderThumbnailStrip(entry, 'mobile');
 
-  document.getElementById('mobile-detail-title').value = entry.title || '';
   document.getElementById('mobile-detail-notes').value = entry.notes || '';
   document.getElementById('mobile-detail-mistakes').value = entry.mistakes || '';
 
-  // Header title sync
-  document.getElementById('mobile-detail-title-header').textContent = entry.title || 'Untitled Setup';
+  // Header title sync - show patterns instead of title
+  const displayName = getDisplayName(entry);
+  document.getElementById('mobile-detail-title-header').textContent = displayName;
 
   // Render Mobile attributes list
   const attrList = document.getElementById('mobile-detail-attributes-list');
   attrList.innerHTML = '';
 
-  // Bias
-  const biasRow = createAttributeRowHTML('Bias', `<select class="input-select" onchange="saveCurrentField('bias', this.value)">
-    <option value="Bullish" ${entry.bias === 'Bullish' ? 'selected' : ''}>Bullish</option>
-    <option value="Bearish" ${entry.bias === 'Bearish' ? 'selected' : ''}>Bearish</option>
-    <option value="Both" ${entry.bias === 'Both' ? 'selected' : ''}>Both</option>
-  </select>`, 'fa-solid fa-arrows-up-down');
+  // Bias - color chips
+  const biasChipsHTML = `
+    <div class="bias-chips-container">
+      <div class="bias-chip ${entry.bias === 'Bullish' ? 'active-bull' : ''}" onclick="saveCurrentField('bias', 'Bullish'); renderAll();">
+        <span class="bias-chip-dot" style="background: var(--color-bull);"></span> Bullish
+      </div>
+      <div class="bias-chip ${entry.bias === 'Bearish' ? 'active-bear' : ''}" onclick="saveCurrentField('bias', 'Bearish'); renderAll();">
+        <span class="bias-chip-dot" style="background: var(--color-bear);"></span> Bearish
+      </div>
+      <div class="bias-chip ${entry.bias === 'Both' ? 'active-both' : ''}" onclick="saveCurrentField('bias', 'Both'); renderAll();">
+        <span class="bias-chip-dot" style="background: var(--color-both);"></span> Both
+      </div>
+    </div>
+  `;
+  const biasRow = createAttributeRowHTML('Bias', biasChipsHTML, 'fa-solid fa-arrows-up-down');
   attrList.appendChild(biasRow);
 
   // Date
@@ -1723,7 +1887,7 @@ function renderMobileDetail() {
   </select>`, 'fa-solid fa-circle-check');
   attrList.appendChild(statusRow);
 
-  // Custom attributes (Market, P&L, plus new additions with trash bins)
+  // Custom attributes (Market, P&L as number, plus new additions with trash bins)
   customAttributes.forEach(attr => {
     let inputHTML = '';
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
@@ -1737,6 +1901,8 @@ function renderMobileDetail() {
           <option value="Gold">
           <option value="Crude Oil">
         </datalist>`;
+    } else if (attr.name === 'P&L') {
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('P&L', Number(this.value))">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
@@ -1744,9 +1910,9 @@ function renderMobileDetail() {
       });
       inputHTML = `<select class="input-select" onchange="saveCustomAttribute('${attr.name}', this.value)">${optionsHtml}</select>`;
     } else if (attr.type === 'number') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="Optional" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('${attr.name}', Number(this.value))">`;
     } else {
-      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="e.g. ₹350" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
     }
 
     const isSystemAttribute = (attr.name === 'Market' || attr.name === 'P&L');
@@ -1755,7 +1921,6 @@ function renderMobileDetail() {
   });
 }
 
-// Mobile Calendar View
 // Mobile Calendar View
 function renderMobileCalendar() {
   const container = document.getElementById('mobile-calendar-view');
@@ -1895,8 +2060,8 @@ function renderMobileMore() {
     </div>
 
     <div class="settings-card" style="padding:12px; gap:8px; margin-top:12px;">
-      <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Local Actions</span>
-      <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px;" onclick="clearDatabase()">Reset Demo Entries</button>
+      <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Data</span>
+      <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px;" onclick="clearDatabase()">Reset All Data</button>
     </div>
   `;
 }

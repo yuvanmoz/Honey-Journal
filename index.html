@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Honey Journal Prototype</title>
+  <title>Honey Journal</title>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Stylesheets -->
@@ -99,7 +99,7 @@
         </div>
 
         <!-- Renderable Content Views -->
-        <div id="desktop-content-area" style="flex:1; overflow-y: auto;">
+        <div id="desktop-content-area" style="flex:1; overflow-y: auto; position: relative;">
           <!-- Gallery Cards Grid -->
           <div class="gallery-container" id="desktop-gallery-view">
             <!-- Dynamic Cards Load Here -->
@@ -111,9 +111,8 @@
               <thead>
                 <tr>
                   <th>Chart</th>
-                  <th>Setup Title</th>
+                  <th>Patterns</th>
                   <th>Bias</th>
-                  <th>Candle Patterns</th>
                   <th>P&L</th>
                   <th onclick="toggleTablePFSort()" style="cursor: pointer;">P/F Status <i class="fa-solid fa-sort"></i></th>
                   <th onclick="toggleTableDateSort()" style="cursor: pointer;">Date <i class="fa-solid fa-sort"></i></th>
@@ -128,6 +127,20 @@
           <!-- Calendar View Pane -->
           <div class="calendar-widget" id="desktop-calendar-view" style="display: none;">
             <!-- Render calendar -->
+          </div>
+
+          <!-- Calendar Date Browser Drawer (slides in from right inside calendar view) -->
+          <div class="calendar-drawer" id="desktop-calendar-drawer">
+            <div class="calendar-drawer-header">
+              <div>
+                <div class="calendar-drawer-title" id="calendar-drawer-date-title">Select a date</div>
+                <div class="calendar-drawer-subtitle" id="calendar-drawer-count">0 Setups</div>
+              </div>
+              <button class="btn-icon" onclick="closeCalendarDrawer()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="calendar-drawer-body" id="calendar-drawer-body">
+              <!-- Dynamically rendered date setup cards -->
+            </div>
           </div>
 
           <!-- Statistics View Pane -->
@@ -159,16 +172,12 @@
               <img src="" alt="Chart Screenshot" class="detail-chart" id="detail-chart-img">
               <div class="chart-upload-overlay" onclick="triggerImageUpload('desktop')">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
-                <span>Upload New Screenshot</span>
+                <span>Upload Screenshot</span>
               </div>
-              <button class="delete-current-image-btn" onclick="deleteActiveImage('desktop'); event.stopPropagation();" title="Delete current image"><i class="fa-solid fa-trash-can"></i></button>
             </div>
             <div class="thumbnail-strip" id="desktop-thumbnail-strip"></div>
             <input type="file" id="desktop-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'desktop')">
           </div>
-
-          <!-- Title Input -->
-          <input type="text" class="detail-title-input" id="detail-title" placeholder="Untitled setup" oninput="saveCurrentField('title', this.value)">
 
           <!-- Attributes Editor List -->
           <div class="attributes-section" id="detail-attributes-list">
@@ -212,9 +221,9 @@
 
         <!-- Phone Screen Viewport -->
         <div class="phone-screen" id="phone-screen-pane">
-          <!-- Mobile Header (No Hamburger drawer, no Sort vertical dots) -->
+          <!-- Mobile Header -->
           <header class="phone-header">
-            <div style="width:16px;"></div> <!-- Placeholder to center text -->
+            <div style="width:16px;"></div>
             <div class="phone-header-title" id="mobile-view-title">Patterns</div>
             <div class="phone-header-icons">
               <i class="fa-solid fa-magnifying-glass" onclick="toggleMobileSearch()"></i>
@@ -304,7 +313,7 @@
             </div>
           </nav>
 
-          <!-- Mobile Detail Slide-up Panel (Image correctly structured at top) -->
+          <!-- Mobile Detail Slide-up Panel -->
           <div class="phone-detail-view" id="mobile-detail-pane">
             <div class="phone-detail-header">
               <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
@@ -324,14 +333,10 @@
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                     <span>Upload Screenshot</span>
                   </div>
-                  <button class="delete-current-image-btn" onclick="deleteActiveImage('mobile'); event.stopPropagation();" title="Delete current image"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
                 <div class="thumbnail-strip" id="mobile-thumbnail-strip"></div>
                 <input type="file" id="mobile-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'mobile')">
               </div>
-
-              <!-- Title -->
-              <input type="text" class="detail-title-input" id="mobile-detail-title" placeholder="Untitled setup" oninput="saveCurrentField('title', this.value)" style="font-size: 18px; margin-bottom: 12px;">
 
               <!-- Attributes list (Details) -->
               <div class="attributes-section" id="mobile-detail-attributes-list" style="gap: 12px; margin-bottom: 16px;">
@@ -349,6 +354,21 @@
                 <div class="text-section-title"><i class="fa-solid fa-triangle-exclamation"></i> Mistakes</div>
                 <textarea class="textarea-control" id="mobile-detail-mistakes" placeholder="Note down mistakes..." oninput="saveCurrentField('mistakes', this.value)" style="min-height: 80px; font-size: 12px;"></textarea>
               </div>
+            </div>
+          </div>
+
+          <!-- Mobile Calendar Date Browser Drawer (slides up from bottom inside calendar view) -->
+          <div class="phone-detail-view" id="mobile-calendar-drawer">
+            <div class="phone-detail-header">
+              <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileCalendarDrawer()"></i>
+              <div class="phone-detail-title" id="mobile-calendar-drawer-date-title">Select a Date</div>
+              <div style="display: flex; gap: 14px; align-items: center;">
+                <span id="mobile-calendar-drawer-count" style="font-size: 11px; color: var(--text-muted);">0 Setups</span>
+                <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileCalendarDrawer()"></i>
+              </div>
+            </div>
+            <div class="phone-detail-body" id="mobile-calendar-drawer-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;">
+              <!-- Dynamically rendered date setup cards -->
             </div>
           </div>
         </div>
@@ -397,27 +417,33 @@
   <!-- Dialog for creating new Tag -->
   <div class="dialog-overlay" id="dialog-add-tag">
     <div class="dialog-box">
-      <div class="dialog-title"><i class="fa-solid fa-tag" style="color: var(--accent-gold);"></i> Create New Tag</div>
+      <div class="dialog-title"><i class="fa-solid fa-tag" style="color: var(--accent-gold);"></i> Create New Pattern</div>
       
       <div style="display: flex; flex-direction: column; gap: 14px;">
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          <label style="font-size: 12px; color: var(--text-secondary);">Tag Name (e.g., VWAP Support)</label>
-          <input type="text" class="input-text" id="new-tag-name" placeholder="Name of pattern...">
+          <label style="font-size: 12px; color: var(--text-secondary);">Pattern Name</label>
+          <input type="text" class="input-text" id="new-tag-name" placeholder="e.g., VWAP Support, Hammer...">
         </div>
         
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          <label style="font-size: 12px; color: var(--text-secondary);">Setup Bias Group (Assigns Theme Color)</label>
-          <select class="input-select" id="new-tag-bias-group">
-            <option value="Bullish">Bullish (Green tag)</option>
-            <option value="Bearish">Bearish (Red tag)</option>
-            <option value="Both">Both (Blue tag)</option>
-          </select>
+          <label style="font-size: 12px; color: var(--text-secondary);">Bias Group</label>
+          <div class="bias-chips-container" id="bias-chips-group">
+            <div class="bias-chip active-bull" data-bias="Bullish" onclick="selectBiasChip(this)">
+              <span class="bias-chip-dot" style="background: var(--color-bull);"></span> Bullish
+            </div>
+            <div class="bias-chip" data-bias="Bearish" onclick="selectBiasChip(this)">
+              <span class="bias-chip-dot" style="background: var(--color-bear);"></span> Bearish
+            </div>
+            <div class="bias-chip" data-bias="Both" onclick="selectBiasChip(this)">
+              <span class="bias-chip-dot" style="background: var(--color-both);"></span> Both
+            </div>
+          </div>
         </div>
       </div>
 
       <div class="dialog-actions">
         <button class="btn-secondary" onclick="closeAddTagDialog()">Cancel</button>
-        <button class="btn-primary" onclick="submitAddTag()">Create Tag</button>
+        <button class="btn-primary" onclick="submitAddTag()">Create Pattern</button>
       </div>
     </div>
   </div>
@@ -431,17 +457,17 @@
       <h1 class="setup-title">Welcome to Honey Journal</h1>
       <p class="setup-description">
         Honey Journal is a private, offline-first trading journal. 
-        Please select a local directory on your machine to store your journal entries and chart screenshots.
+        Select a local directory to store your journal entries and chart screenshots.
       </p>
       
       <div class="setup-action-wrapper">
-        <button class="btn-primary btn-large" onclick="chooseStorageFolder()" style="height: 48px; padding: 0 24px; font-size: 14px; width: 100%; justify-content: center; border-radius: var(--radius-md);">
+        <button class="btn-primary btn-large" onclick="chooseStorageFolder()" style="height: 48px; padding: 0 24px; font-size: 14px; width: 100%; justify-content: center; border-radius: 100px;">
           <i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i> Select Storage Folder
         </button>
       </div>
       
       <p class="setup-footer-note">
-        Tip: Select the directory synced between this computer and your Android device using Syncthing.
+        Your data stays on your device. Fully offline, fully private.
       </p>
     </div>
   </div>
