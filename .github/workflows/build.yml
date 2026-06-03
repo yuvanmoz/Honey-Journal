@@ -48,5 +48,5 @@ jobs:
         with:
           tagName: v${{ github.run_number }}
           releaseName: 'Honey Journal v${{ github.run_number }}'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
