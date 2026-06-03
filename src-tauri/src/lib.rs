@@ -4,8 +4,16 @@ use std::path::Path;
 
 #[tauri::command]
 fn select_folder(app: tauri::AppHandle) -> Option<String> {
-  let folder = app.dialog().file().blocking_pick_folder();
-  folder.and_then(|p| p.into_path().ok()).map(|pb| pb.to_string_lossy().into_owned())
+  #[cfg(desktop)]
+  {
+    let folder = app.dialog().file().blocking_pick_folder();
+    folder.and_then(|p| p.into_path().ok()).map(|pb| pb.to_string_lossy().into_owned())
+  }
+  #[cfg(mobile)]
+  {
+    use tauri::Manager;
+    app.path().document_dir().ok().map(|pb| pb.to_string_lossy().into_owned())
+  }
 }
 
 #[tauri::command]
