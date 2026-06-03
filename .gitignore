@@ -1,0 +1,13 @@
+# Node dependencies
+node_modules/
+package-lock.json
+
+# Production assets (built on GitHub Actions)
+dist/
+
+# Rust/Tauri compile target directories
+src-tauri/target/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,50 @@
+name: Build Apps (Cloud Compile)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build Frontend Assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist
+          Copy-Item index.html dist/index.html
+          Copy-Item style.css dist/style.css
+          Copy-Item app.js dist/app.js
+          Copy-Item mockData.js dist/mockData.js
+          Copy-Item -Recurse -Force Images dist/Images
+
+      - name: Build Tauri App (.exe)
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ github.run_number }}
+          releaseName: 'Honey Journal v${{ github.run_number }}'
+          releaseDraft: true
+          prerelease: false
