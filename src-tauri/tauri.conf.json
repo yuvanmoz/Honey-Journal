@@ -3,14 +3,14 @@
     "distDir": "../dist",
     "devPath": "../dist",
     "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "beforeBuildCommand": "",
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "Honey Journal",
     "version": "0.1.0"
   },
   "tauri": {
-    "withGlobalTauri": true,
     "allowlist": {
       "all": false,
       "dialog": {
