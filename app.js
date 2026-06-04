@@ -69,6 +69,19 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.querySelectorAll('.tag-multiselect-dropdown').forEach(d => d.classList.remove('open'));
     }
   });
+
+  // Bind blur listener for instant saving on focus loss
+  const blurSave = () => {
+    const entry = entries.find(e => e.id === activeEntryId);
+    if (entry) {
+      saveDatabase(entry, false, true); // Save immediately on focus out
+    }
+  };
+  
+  document.getElementById('detail-notes')?.addEventListener('blur', blurSave);
+  document.getElementById('detail-mistakes')?.addEventListener('blur', blurSave);
+  document.getElementById('mobile-detail-notes')?.addEventListener('blur', blurSave);
+  document.getElementById('mobile-detail-mistakes')?.addEventListener('blur', blurSave);
 });
 
 // Sync Clock for phone mockup
@@ -248,7 +261,7 @@ async function loadDatabase() {
 let saveTimeout = null;
 const entriesToSave = new Set();
 
-async function saveDatabase(specificEntry = null, saveAll = false) {
+async function saveDatabase(specificEntry = null, saveAll = false, immediate = false) {
   localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
   localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
   localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
@@ -262,8 +275,7 @@ async function saveDatabase(specificEntry = null, saveAll = false) {
       entriesToSave.add(activeEntryId);
     }
 
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
+    const performSave = async () => {
       await saveTagsToDisk();
       await saveAttributesToDisk();
       
@@ -276,7 +288,15 @@ async function saveDatabase(specificEntry = null, saveAll = false) {
       }
       await Promise.all(promises);
       entriesToSave.clear();
-    }, 300);
+    };
+
+    if (saveTimeout) clearTimeout(saveTimeout);
+    
+    if (immediate) {
+      await performSave();
+    } else {
+      saveTimeout = setTimeout(performSave, 300);
+    }
   }
 }
 
@@ -658,9 +678,13 @@ function renderDesktopGallery(list) {
     const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
     const hasImage = firstImage !== '';
 
+    const transformStyle = hasImage && (entry.imageScale || entry.imageX || entry.imageY)
+      ? `style="transform: scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px); transform-origin: center center;"`
+      : '';
+
     const imgHtml = hasImage 
-      ? `<img src="${firstImage}" alt="${displayTitle}" class="card-img">`
-      : `<div class="card-img-empty"><i class="fa-solid fa-chart-line"></i></div>`;
+      ? `<img src="${firstImage}" alt="${displayTitle}" class="card-img" ${transformStyle}>`
+      : `<div class="card-img-empty" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-secondary); color:var(--text-muted); font-size:24px;"><i class="fa-solid fa-chart-line"></i></div>`;
 
     // Format P&L display
     const plVal = entry.customAttributes ? entry.customAttributes['P&L'] : null;
@@ -1021,28 +1045,33 @@ function renderDesktopStats(isDashboard = false) {
   if (isDashboard) {
     const statsObj = calculatePatternStats();
     container.innerHTML = `
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-card-title">Total Setups</span>
-          <span class="stat-card-val">${totalTrades}</span>
-          <span class="stat-card-label">Logged setups in library</span>
+      <div class="dashboard-header-section">
+        <h1 class="dashboard-large-title">Dashboard</h1>
+      </div>
+      <div class="apple-dashboard-grid">
+        <div class="apple-metric-card">
+          <div class="apple-metric-label">Total Setups</div>
+          <div class="apple-metric-value">${totalTrades}</div>
+          <div class="apple-metric-sub">Logged setups in library</div>
         </div>
-        <div class="stat-card">
-          <span class="stat-card-title">Win Rate</span>
-          <span class="stat-card-val success">${winRate}%</span>
-          <span class="stat-card-label">Setups marked as PASSED</span>
+        <div class="apple-metric-card">
+          <div class="apple-metric-label">Win Rate</div>
+          <div class="apple-metric-value win">${winRate}%</div>
+          <div class="apple-metric-sub">Setups marked as PASSED</div>
         </div>
       </div>
       
-      <div class="stat-list">
-        <h3 style="padding: 10px 0; font-size: 14px; color: var(--text-secondary);">Setup Insights</h3>
-        <div class="stat-list-item">
-          <span class="stat-list-label">Most Profitable Pattern</span>
-          <span class="stat-list-val" style="color: var(--color-bull);">${statsObj.bestPattern}</span>
-        </div>
-        <div class="stat-list-item">
-          <span class="stat-list-label">Worst Performing Pattern</span>
-          <span class="stat-list-val" style="color: var(--color-bear);">${statsObj.worstPattern}</span>
+      <div class="apple-insights-section">
+        <h2 class="apple-section-title">Setup Insights</h2>
+        <div class="apple-insights-grid">
+          <div class="apple-insight-card">
+            <div class="apple-insight-title">Most Profitable Pattern</div>
+            <div class="apple-insight-value bull">${statsObj.bestPattern || 'None'}</div>
+          </div>
+          <div class="apple-insight-card">
+            <div class="apple-insight-title">Worst Performing Pattern</div>
+            <div class="apple-insight-value bear">${statsObj.worstPattern || 'None'}</div>
+          </div>
         </div>
       </div>
     `;
@@ -1184,11 +1213,21 @@ function renderDesktopDetail() {
     if (imgs.length > 0) {
       mainImgEl.src = imgs[activeImageIndex];
       mainImgEl.style.display = 'block';
+      mainImgEl.style.transform = `scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px)`;
       if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
+      document.getElementById('desktop-image-actions').style.display = 'flex';
+      
+      const hasNav = imgs.length > 1;
+      document.getElementById('desktop-image-prev').style.display = hasNav ? 'flex' : 'none';
+      document.getElementById('desktop-image-next').style.display = hasNav ? 'flex' : 'none';
     } else {
       mainImgEl.src = '';
       mainImgEl.style.display = 'none';
+      mainImgEl.style.transform = 'none';
       if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
+      document.getElementById('desktop-image-actions').style.display = 'none';
+      document.getElementById('desktop-image-prev').style.display = 'none';
+      document.getElementById('desktop-image-next').style.display = 'none';
     }
   }
 
@@ -1327,8 +1366,11 @@ function generateTagMultiSelectHTML(selectedPatterns) {
         ${selectedBadgesHtml}
       </div>
       <div class="tag-multiselect-dropdown">
-        ${dropdownItemsHtml}
-        <button class="tag-create-btn" onclick="openAddTagDialog()"><i class="fa-solid fa-plus"></i> Add New Pattern</button>
+        <div class="dropdown-scroll-area" style="max-height: 180px; overflow-y: auto;">
+          ${dropdownItemsHtml}
+        </div>
+        <input type="text" class="quick-tag-input" placeholder="Quick add pattern..." onkeydown="handleQuickAddTag(event, this)" onclick="event.stopPropagation();">
+        <button class="tag-create-btn" onclick="openAddTagDialog()" style="border-top: 1px solid var(--border-color); width: 100%; border-radius: 0; margin: 0; padding: 10px 12px; display: flex; justify-content: center; align-items: center; gap: 6px;"><i class="fa-solid fa-plus"></i> Custom Colors Dialog</button>
       </div>
     </div>
   `;
@@ -1350,7 +1392,7 @@ function togglePatternTag(tagName) {
     entry.patterns.push(tagName);
   }
 
-  saveDatabase();
+  saveDatabase(entry, false, true); // Immediate save
   renderAll();
 }
 
@@ -1360,7 +1402,9 @@ function saveCurrentField(field, val) {
 
   entry[field] = val;
   entry.updatedAt = new Date().toISOString();
-  saveDatabase();
+  
+  const immediate = (field !== 'notes' && field !== 'mistakes');
+  saveDatabase(entry, false, immediate);
   
   // Re-render grids
   const processedList = getProcessedEntries(desktopSearchText, activeCalendarDate);
@@ -1802,10 +1846,14 @@ function renderMobileGallery(list) {
     }
 
     const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+    const hasImage = firstImage !== '';
+    const transformStyle = hasImage && (entry.imageScale || entry.imageX || entry.imageY)
+      ? `style="transform: scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px); transform-origin: center center;"`
+      : '';
 
     card.innerHTML = `
       <div class="phone-card-img-wrapper">
-        ${firstImage ? `<img src="${firstImage}" alt="${displayTitle}" class="phone-card-img">` : `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary);"><i class="fa-solid fa-chart-line" style="color:var(--text-muted);"></i></div>`}
+        ${hasImage ? `<img src="${firstImage}" alt="${displayTitle}" class="phone-card-img" ${transformStyle}>` : `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary);"><i class="fa-solid fa-chart-line" style="color:var(--text-muted);"></i></div>`}
       </div>
       <div class="phone-card-header" style="padding: 6px; display: flex; flex-direction: column; gap: 4px;">
         <div class="phone-card-patterns" style="display: flex; flex-wrap: wrap; gap: 2px;">
@@ -1844,11 +1892,21 @@ function renderMobileDetail() {
     if (imgs.length > 0) {
       mainImgEl.src = imgs[activeImageIndex];
       mainImgEl.style.display = 'block';
+      mainImgEl.style.transform = `scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px)`;
       if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
+      document.getElementById('mobile-image-actions').style.display = 'flex';
+      
+      const hasNav = imgs.length > 1;
+      document.getElementById('mobile-image-prev').style.display = hasNav ? 'flex' : 'none';
+      document.getElementById('mobile-image-next').style.display = hasNav ? 'flex' : 'none';
     } else {
       mainImgEl.src = '';
       mainImgEl.style.display = 'none';
+      mainImgEl.style.transform = 'none';
       if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
+      document.getElementById('mobile-image-actions').style.display = 'none';
+      document.getElementById('mobile-image-prev').style.display = 'none';
+      document.getElementById('mobile-image-next').style.display = 'none';
     }
   }
 
@@ -2027,24 +2085,30 @@ function renderMobileDashboard() {
   const statsObj = calculatePatternStats();
 
   container.innerHTML = `
-    <div class="stats-grid" style="grid-template-columns: 1fr; gap: 8px; padding: 12px;">
-      <div class="stat-card" style="padding:10px;">
-        <span class="stat-card-title" style="font-size:10px;">Total Setups</span>
-        <span class="stat-card-val" style="font-size:18px;">${totalTrades}</span>
+    <div style="padding: 16px 20px 6px 20px;">
+      <h1 class="dashboard-large-title" style="font-size: 24px;">Dashboard</h1>
+    </div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 20px;">
+      <div class="apple-metric-card" style="padding: 14px 16px; border-radius: 18px;">
+        <div class="apple-metric-label" style="font-size: 9px; margin-bottom: 4px;">Total Setups</div>
+        <div class="apple-metric-value" style="font-size: 26px; margin-bottom: 2px;">${totalTrades}</div>
       </div>
-      <div class="stat-card" style="padding:10px;">
-        <span class="stat-card-title" style="font-size:10px;">Win Rate</span>
-        <span class="stat-card-val success" style="font-size:18px;">${winRate}%</span>
+      <div class="apple-metric-card" style="padding: 14px 16px; border-radius: 18px;">
+        <div class="apple-metric-label" style="font-size: 9px; margin-bottom: 4px;">Win Rate</div>
+        <div class="apple-metric-value win" style="font-size: 26px; margin-bottom: 2px;">${winRate}%</div>
       </div>
     </div>
-    <div class="stat-list" style="padding:12px; gap:6px;">
-      <div class="stat-list-item" style="padding:8px 12px; font-size:11px;">
-        <span class="stat-list-label">Most Profitable</span>
-        <span class="stat-list-val" style="color:var(--color-bull);">${statsObj.bestPattern}</span>
-      </div>
-      <div class="stat-list-item" style="padding:8px 12px; font-size:11px;">
-        <span class="stat-list-label">Worst Performing</span>
-        <span class="stat-list-val" style="color:var(--color-bear);">${statsObj.worstPattern}</span>
+    <div class="apple-insights-section" style="padding: 12px 20px; margin-top: 6px;">
+      <h2 class="apple-section-title" style="font-size: 15px; margin-bottom: 12px;">Setup Insights</h2>
+      <div class="apple-insights-grid" style="grid-template-columns: 1fr; gap: 10px;">
+        <div class="apple-insight-card" style="padding: 14px 16px; border-radius: 18px; min-height: 70px;">
+          <div class="apple-insight-title" style="font-size: 9px; margin-bottom: 4px;">Most Profitable</div>
+          <div class="apple-insight-value bull" style="font-size: 15px;">${statsObj.bestPattern || 'None'}</div>
+        </div>
+        <div class="apple-insight-card" style="padding: 14px 16px; border-radius: 18px; min-height: 70px;">
+          <div class="apple-insight-title" style="font-size: 9px; margin-bottom: 4px;">Worst Performing</div>
+          <div class="apple-insight-value bear" style="font-size: 15px;">${statsObj.worstPattern || 'None'}</div>
+        </div>
       </div>
     </div>
   `;
@@ -2076,4 +2140,204 @@ function renderMobileMore() {
       <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px;" onclick="clearDatabase()">Reset All Data</button>
     </div>
   `;
+}
+
+// ==========================================================================
+// LIGHTBOX AND DOCKABLE ZOOM VIEWER
+// ==========================================================================
+function triggerLightboxZoom(src) {
+  if (repositionState.isActive) return;
+
+  const lightbox = document.getElementById('image-lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  if (lightbox && lightboxImg && src) {
+    lightboxImg.src = src;
+    lightbox.style.display = 'flex';
+  }
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById('image-lightbox');
+  if (lightbox) {
+    lightbox.style.display = 'none';
+  }
+}
+
+// ==========================================================================
+// IMAGE REPOSITIONING CONTROL SYSTEM
+// ==========================================================================
+let repositionState = {
+  isActive: false,
+  platform: null,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0,
+  currentScale: 1.0,
+  imgElement: null,
+  wrapperElement: null
+};
+
+function toggleRepositionMode(platform) {
+  if (repositionState.isActive) {
+    saveReposition(platform);
+    return;
+  }
+
+  const wrapperId = platform === 'desktop' ? 'desktop-main-image-wrapper' : 'mobile-main-image-wrapper';
+  const imgId = platform === 'desktop' ? 'detail-chart-img' : 'mobile-detail-chart-img';
+  
+  const wrapper = document.getElementById(wrapperId);
+  const img = document.getElementById(imgId);
+  if (!wrapper || !img || !activeEntryId) return;
+
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return;
+
+  repositionState.isActive = true;
+  repositionState.platform = platform;
+  repositionState.currentX = entry.imageX || 0;
+  repositionState.currentY = entry.imageY || 0;
+  repositionState.currentScale = entry.imageScale || 1.0;
+  repositionState.imgElement = img;
+  repositionState.wrapperElement = wrapper;
+
+  wrapper.classList.add('repositioning-active');
+  document.getElementById(`${platform}-reposition-instructions`).style.display = 'flex';
+  document.getElementById(`${platform}-reposition-zoom-box`).style.display = 'flex';
+  
+  const slider = document.getElementById(`${platform}-reposition-zoom-slider`);
+  if (slider) slider.value = repositionState.currentScale;
+
+  wrapper.addEventListener('mousedown', handleRepositionStart);
+  wrapper.addEventListener('touchstart', handleRepositionStart, { passive: false });
+}
+
+function handleRepositionStart(e) {
+  e.preventDefault();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  repositionState.startX = clientX - repositionState.currentX;
+  repositionState.startY = clientY - repositionState.currentY;
+
+  window.addEventListener('mousemove', handleRepositionMove);
+  window.addEventListener('mouseup', handleRepositionEnd);
+  window.addEventListener('touchmove', handleRepositionMove, { passive: false });
+  window.addEventListener('touchend', handleRepositionEnd);
+}
+
+function handleRepositionMove(e) {
+  if (!repositionState.isActive) return;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  const targetX = clientX - repositionState.startX;
+  const targetY = clientY - repositionState.startY;
+
+  repositionState.currentX = targetX;
+  repositionState.currentY = targetY;
+
+  repositionState.imgElement.style.transform = `scale(${repositionState.currentScale}) translate(${targetX}px, ${targetY}px)`;
+}
+
+function handleRepositionEnd(e) {
+  window.removeEventListener('mousemove', handleRepositionMove);
+  window.removeEventListener('mouseup', handleRepositionEnd);
+  window.removeEventListener('touchmove', handleRepositionMove);
+  window.removeEventListener('touchend', handleRepositionEnd);
+}
+
+function handleRepositionZoom(platform, val) {
+  if (!repositionState.isActive) return;
+  repositionState.currentScale = parseFloat(val);
+  repositionState.imgElement.style.transform = `scale(${repositionState.currentScale}) translate(${repositionState.currentX}px, ${repositionState.currentY}px)`;
+}
+
+function saveReposition(platform) {
+  if (!repositionState.isActive) return;
+
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (entry) {
+    entry.imageScale = repositionState.currentScale;
+    entry.imageX = repositionState.currentX;
+    entry.imageY = repositionState.currentY;
+    saveDatabase(entry, false, true); // Immediate save
+  }
+
+  repositionState.isActive = false;
+  
+  const wrapper = repositionState.wrapperElement;
+  if (wrapper) {
+    wrapper.classList.remove('repositioning-active');
+    wrapper.removeEventListener('mousedown', handleRepositionStart);
+    wrapper.removeEventListener('touchstart', handleRepositionStart);
+  }
+
+  document.getElementById(`${platform}-reposition-instructions`).style.display = 'none';
+  document.getElementById(`${platform}-reposition-zoom-box`).style.display = 'none';
+
+  renderAll();
+}
+
+// ==========================================================================
+// QUICK-ADD TAG SYSTEM IN MULTISELECT DROPDOWN
+// ==========================================================================
+function handleQuickAddTag(event, inputEl) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const tagName = inputEl.value.trim();
+    if (!tagName) return;
+
+    const duplicate = tags.find(t => t.name.toLowerCase() === tagName.toLowerCase());
+    if (duplicate) {
+      const entry = entries.find(e => e.id === activeEntryId);
+      if (entry && !entry.patterns.includes(duplicate.name)) {
+        entry.patterns.push(duplicate.name);
+        saveDatabase(entry, false, true);
+        renderAll();
+      }
+      inputEl.value = '';
+      return;
+    }
+
+    const defaultColor = '#3b82f6';
+    const defaultBg = 'rgba(59, 130, 246, 0.15)';
+    const newTagObj = {
+      name: tagName,
+      bias: 'Both',
+      color: defaultColor,
+      bg: defaultBg
+    };
+
+    tags.push(newTagObj);
+    
+    const entry = entries.find(e => e.id === activeEntryId);
+    if (entry) {
+      entry.patterns.push(tagName);
+      saveDatabase(entry, false, true);
+    } else {
+      saveDatabase(null, false, true);
+    }
+
+    inputEl.value = '';
+    renderAll();
+  }
+}
+
+// ==========================================================================
+// IMAGE NAVIGATION CAROUSEL METHODS
+// ==========================================================================
+function prevImage(platform) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry || !entry.images || entry.images.length <= 1) return;
+  activeImageIndex = (activeImageIndex - 1 + entry.images.length) % entry.images.length;
+  renderAll();
+}
+
+function nextImage(platform) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry || !entry.images || entry.images.length <= 1) return;
+  activeImageIndex = (activeImageIndex + 1) % entry.images.length;
+  renderAll();
 }

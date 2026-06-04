@@ -11,8 +11,7 @@ fn select_folder(app: tauri::AppHandle) -> Option<String> {
   }
   #[cfg(mobile)]
   {
-    use tauri::Manager;
-    app.path().document_dir().ok().map(|pb| pb.to_string_lossy().into_owned())
+    Some("/storage/emulated/0/Documents/HoneyJournal".to_string())
   }
 }
 

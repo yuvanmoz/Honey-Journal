@@ -100,6 +100,17 @@ jobs:
         run: |
           CI=true npx tauri android init
 
+      - name: Inject Android Manage External Storage Permission
+        run: |
+          MANIFEST_PATH="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" \/>' "$MANIFEST_PATH"
+            echo "Injected MANAGE_EXTERNAL_STORAGE permission successfully."
+          else
+            echo "Error: AndroidManifest.xml not found at $MANIFEST_PATH"
+            exit 1
+          fi
+
       - name: Build Android App (.apk)
         run: |
           npx tauri android build --apk --debug

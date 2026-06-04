@@ -61,7 +61,7 @@
             <div class="view-title" id="desktop-view-title">Patterns</div>
             <div class="header-actions">
               <!-- Gallery/Table tabs -->
-              <div class="header-tabs" id="desktop-tabs-container">
+              <div class="header-tabs segmented-control" id="desktop-tabs-container">
                 <button class="tab-btn active" id="tab-d-gallery" onclick="setDesktopLayout('gallery')">Gallery</button>
                 <button class="tab-btn" id="tab-d-table" onclick="setDesktopLayout('table')">Table</button>
               </div>
@@ -168,13 +168,38 @@
         <div class="detail-body" id="detail-form-container">
           <!-- Image attachment drag and drop -->
           <div class="detail-images-container">
-            <div class="detail-chart-wrapper" id="desktop-main-image-wrapper">
-              <img src="" alt="Chart Screenshot" class="detail-chart" id="detail-chart-img">
+            <div class="detail-chart-wrapper" id="desktop-main-image-wrapper" style="position: relative; overflow: hidden;">
+              <img src="" alt="Chart Screenshot" class="detail-chart" id="detail-chart-img" onclick="triggerLightboxZoom(this.src)" style="cursor: zoom-in; transform-origin: center center; transition: none;">
+              <!-- Navigation Arrows -->
+              <button class="image-nav-btn prev" id="desktop-image-prev" onclick="event.stopPropagation(); prevImage('desktop');" style="display: none;"><i class="fa-solid fa-chevron-left"></i></button>
+              <button class="image-nav-btn next" id="desktop-image-next" onclick="event.stopPropagation(); nextImage('desktop');" style="display: none;"><i class="fa-solid fa-chevron-right"></i></button>
+              
+              <!-- Upload Placeholder (only shows when empty) -->
               <div class="chart-upload-overlay" onclick="triggerImageUpload('desktop')">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
                 <span>Upload Screenshot</span>
               </div>
+              
+              <!-- Reposition Dragging Instructions overlay -->
+              <div class="reposition-instructions-overlay" id="desktop-reposition-instructions" style="display: none;">
+                <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                <span>Drag to align chart. Scroll or slide to zoom.</span>
+              </div>
             </div>
+            
+            <!-- Actions bar containing dedicated small upload & reposition buttons -->
+            <div class="image-actions-bar" id="desktop-image-actions" style="display: none; justify-content: space-between; gap: 8px; margin-top: 6px;">
+              <button class="btn-secondary btn-sm" onclick="triggerImageUpload('desktop')" title="Upload new image"><i class="fa-solid fa-cloud-arrow-up"></i> Add Image</button>
+              <button class="btn-secondary btn-sm" id="desktop-reposition-toggle" onclick="toggleRepositionMode('desktop')" title="Reposition crop within card"><i class="fa-solid fa-arrows-up-down-left-right"></i> Reposition</button>
+            </div>
+            
+            <!-- Slider for reposition mode zoom -->
+            <div class="reposition-zoom-container" id="desktop-reposition-zoom-box" style="display: none; align-items: center; gap: 10px; margin-top: 6px; padding: 6px 10px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+              <span style="font-size: 11px; color: var(--text-secondary);"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom:</span>
+              <input type="range" id="desktop-reposition-zoom-slider" min="1" max="3" step="0.05" value="1" oninput="handleRepositionZoom('desktop', this.value)" style="flex: 1;">
+              <button class="btn-primary btn-sm" onclick="saveReposition('desktop')" style="border-radius: 4px; padding: 3px 10px; font-size: 11px;">Done</button>
+            </div>
+
             <div class="thumbnail-strip" id="desktop-thumbnail-strip"></div>
             <input type="file" id="desktop-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'desktop')">
           </div>
@@ -313,63 +338,88 @@
             </div>
           </nav>
 
-          <!-- Mobile Detail Slide-up Panel -->
-          <div class="phone-detail-view" id="mobile-detail-pane">
-            <div class="phone-detail-header">
-              <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
-              <div class="phone-detail-title" id="mobile-detail-title-header">Setup Details</div>
-              <div style="display: flex; gap: 14px; align-items: center;">
-                <i class="fa-solid fa-trash-can" style="color: var(--color-bear); cursor: pointer;" onclick="deleteActiveEntry()"></i>
-                <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
-              </div>
-            </div>
+        </div>
 
-            <div class="phone-detail-body" id="mobile-detail-body">
-              <!-- Screenshot (repositioned at the very top of details layout) -->
-              <div class="mobile-images-container" style="margin-bottom:12px;">
-                <div class="detail-chart-wrapper" id="mobile-main-image-wrapper">
-                  <img src="" alt="Chart Screenshot" class="detail-chart" id="mobile-detail-chart-img" style="display: block; width: 100%; height: auto;">
-                  <div class="chart-upload-overlay" onclick="triggerImageUpload('mobile')">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                    <span>Upload Screenshot</span>
-                  </div>
-                </div>
-                <div class="thumbnail-strip" id="mobile-thumbnail-strip"></div>
-                <input type="file" id="mobile-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'mobile')">
-              </div>
-
-              <!-- Attributes list (Details) -->
-              <div class="attributes-section" id="mobile-detail-attributes-list" style="gap: 12px; margin-bottom: 16px;">
-                <!-- Dynamically Rendered -->
-              </div>
-
-              <!-- Notes -->
-              <div class="text-section" style="margin-bottom:16px;">
-                <div class="text-section-title"><i class="fa-solid fa-pen-nib"></i> Notes</div>
-                <textarea class="textarea-control" id="mobile-detail-notes" placeholder="Write entry notes here..." oninput="saveCurrentField('notes', this.value)" style="min-height: 80px; font-size: 12px;"></textarea>
-              </div>
-
-              <!-- Mistakes -->
-              <div class="text-section" style="margin-bottom:16px;">
-                <div class="text-section-title"><i class="fa-solid fa-triangle-exclamation"></i> Mistakes</div>
-                <textarea class="textarea-control" id="mobile-detail-mistakes" placeholder="Note down mistakes..." oninput="saveCurrentField('mistakes', this.value)" style="min-height: 80px; font-size: 12px;"></textarea>
-              </div>
+        <!-- Mobile Detail Slide-up Panel -->
+        <div class="phone-detail-view" id="mobile-detail-pane">
+          <div class="phone-detail-header">
+            <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
+            <div class="phone-detail-title" id="mobile-detail-title-header">Setup Details</div>
+            <div style="display: flex; gap: 14px; align-items: center;">
+              <i class="fa-solid fa-trash-can" style="color: var(--color-bear); cursor: pointer;" onclick="deleteActiveEntry()"></i>
+              <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
             </div>
           </div>
 
-          <!-- Mobile Calendar Date Browser Drawer (slides up from bottom inside calendar view) -->
-          <div class="phone-detail-view" id="mobile-calendar-drawer">
-            <div class="phone-detail-header">
-              <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileCalendarDrawer()"></i>
-              <div class="phone-detail-title" id="mobile-calendar-drawer-date-title">Select a Date</div>
-              <div style="display: flex; gap: 14px; align-items: center;">
-                <span id="mobile-calendar-drawer-count" style="font-size: 11px; color: var(--text-muted);">0 Setups</span>
-                <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileCalendarDrawer()"></i>
+          <div class="phone-detail-body" id="mobile-detail-body">
+            <!-- Screenshot (repositioned at the very top of details layout) -->
+            <div class="mobile-images-container" style="margin-bottom:12px;">
+              <div class="detail-chart-wrapper" id="mobile-main-image-wrapper" style="position: relative; overflow: hidden;">
+                <img src="" alt="Chart Screenshot" class="detail-chart" id="mobile-detail-chart-img" onclick="triggerLightboxZoom(this.src)" style="display: block; width: 100%; height: auto; cursor: zoom-in; transform-origin: center center; transition: none;">
+                <!-- Navigation Arrows -->
+                <button class="image-nav-btn prev" id="mobile-image-prev" onclick="event.stopPropagation(); prevImage('mobile');" style="display: none;"><i class="fa-solid fa-chevron-left"></i></button>
+                <button class="image-nav-btn next" id="mobile-image-next" onclick="event.stopPropagation(); nextImage('mobile');" style="display: none;"><i class="fa-solid fa-chevron-right"></i></button>
+                
+                <div class="chart-upload-overlay" onclick="triggerImageUpload('mobile')">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <span>Upload Screenshot</span>
+                </div>
+                
+                <!-- Reposition Dragging Instructions overlay -->
+                <div class="reposition-instructions-overlay" id="mobile-reposition-instructions" style="display: none;">
+                  <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                  <span style="font-size: 10px;">Drag to align chart / Zoom below.</span>
+                </div>
               </div>
+
+              <!-- Actions bar containing dedicated small upload & reposition buttons -->
+              <div class="image-actions-bar" id="mobile-image-actions" style="display: none; justify-content: space-between; gap: 8px; margin-top: 6px;">
+                <button class="btn-secondary btn-sm" onclick="triggerImageUpload('mobile')" style="font-size: 11px; padding: 4px 8px;" title="Upload new image"><i class="fa-solid fa-cloud-arrow-up"></i> Add Image</button>
+                <button class="btn-secondary btn-sm" id="mobile-reposition-toggle" onclick="toggleRepositionMode('mobile')" style="font-size: 11px; padding: 4px 8px;" title="Reposition crop within card"><i class="fa-solid fa-arrows-up-down-left-right"></i> Reposition</button>
+              </div>
+              
+              <!-- Slider for reposition mode zoom -->
+              <div class="reposition-zoom-container" id="mobile-reposition-zoom-box" style="display: none; align-items: center; gap: 10px; margin-top: 6px; padding: 6px 10px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+                <span style="font-size: 10px; color: var(--text-secondary);"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom:</span>
+                <input type="range" id="mobile-reposition-zoom-slider" min="1" max="3" step="0.05" value="1" oninput="handleRepositionZoom('mobile', this.value)" style="flex: 1;">
+                <button class="btn-primary btn-sm" onclick="saveReposition('mobile')" style="border-radius: 4px; padding: 3px 8px; font-size: 10px;">Done</button>
+              </div>
+
+              <div class="thumbnail-strip" id="mobile-thumbnail-strip"></div>
+              <input type="file" id="mobile-chart-file" accept="image/*" style="display: none;" onchange="handleImageFileSelect(this, 'mobile')">
             </div>
-            <div class="phone-detail-body" id="mobile-calendar-drawer-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;">
-              <!-- Dynamically rendered date setup cards -->
+
+            <!-- Attributes list (Details) -->
+            <div class="attributes-section" id="mobile-detail-attributes-list" style="gap: 12px; margin-bottom: 16px;">
+              <!-- Dynamically Rendered -->
             </div>
+
+            <!-- Notes -->
+            <div class="text-section" style="margin-bottom:16px;">
+              <div class="text-section-title"><i class="fa-solid fa-pen-nib"></i> Notes</div>
+              <textarea class="textarea-control" id="mobile-detail-notes" placeholder="Write entry notes here..." oninput="saveCurrentField('notes', this.value)" style="min-height: 80px; font-size: 12px;"></textarea>
+            </div>
+
+            <!-- Mistakes -->
+            <div class="text-section" style="margin-bottom:16px;">
+              <div class="text-section-title"><i class="fa-solid fa-triangle-exclamation"></i> Mistakes</div>
+              <textarea class="textarea-control" id="mobile-detail-mistakes" placeholder="Note down mistakes..." oninput="saveCurrentField('mistakes', this.value)" style="min-height: 80px; font-size: 12px;"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile Calendar Date Browser Drawer (slides up from bottom inside calendar view) -->
+        <div class="phone-detail-view" id="mobile-calendar-drawer">
+          <div class="phone-detail-header">
+            <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileCalendarDrawer()"></i>
+            <div class="phone-detail-title" id="mobile-calendar-drawer-date-title">Select a Date</div>
+            <div style="display: flex; gap: 14px; align-items: center;">
+              <span id="mobile-calendar-drawer-count" style="font-size: 11px; color: var(--text-muted);">0 Setups</span>
+              <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileCalendarDrawer()"></i>
+            </div>
+          </div>
+          <div class="phone-detail-body" id="mobile-calendar-drawer-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;">
+            <!-- Dynamically rendered date setup cards -->
           </div>
         </div>
       </div>
@@ -470,6 +520,12 @@
         Your data stays on your device. Fully offline, fully private.
       </p>
     </div>
+  </div>
+
+  <!-- Lightbox modal for premium image zoom -->
+  <div id="image-lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+    <img id="lightbox-img" class="lightbox-content" src="" alt="Zoomed view">
   </div>
 
   <!-- Scripts -->
