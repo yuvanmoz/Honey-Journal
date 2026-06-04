@@ -478,24 +478,66 @@
   <!-- First-Run Directory Chooser Overlay Screen -->
   <div class="setup-screen-overlay" id="setup-screen" style="display: none;">
     <div class="setup-box">
-      <div class="setup-icon">
-        <i class="fa-solid fa-folder-tree"></i>
+
+      <!-- STEP 1 (Mobile): Request storage permission -->
+      <div id="setup-step-permission" style="display: none; flex-direction: column; align-items: center; gap: 22px;">
+        <div class="setup-icon">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h1 class="setup-title">Storage Permission Needed</h1>
+        <p class="setup-description">
+          Honey Journal needs permission to access shared storage so your data can be synced with Syncthing and other devices.<br><br>
+          Tap <strong>"Grant Permission"</strong> — your device will open the Settings screen. Enable <strong>"Allow management of all files"</strong> for Honey Journal, then come back and tap <strong>"Continue"</strong>.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+          <button class="btn-primary btn-large" onclick="grantAndroidStoragePermission()" style="height: 48px; padding: 0 24px; font-size: 14px; width: 100%; justify-content: center; border-radius: 100px;">
+            <i class="fa-solid fa-arrow-up-right-from-square" style="margin-right: 8px;"></i> Grant Permission
+          </button>
+          <button class="btn-secondary" onclick="continueAfterPermissionGranted()" style="height: 44px; padding: 0 24px; font-size: 13px; width: 100%; justify-content: center; border-radius: 100px;">
+            <i class="fa-solid fa-check" style="margin-right: 8px;"></i> I've granted it — Continue
+          </button>
+        </div>
+        <p class="setup-footer-note" id="setup-permission-error" style="color: var(--color-bear); display: none;">
+          <i class="fa-solid fa-circle-exclamation"></i> Permission still not granted. Please enable "All files access" for Honey Journal in Settings and try again.
+        </p>
+        <p class="setup-footer-note">Your data stays on your device. Fully offline, fully private.</p>
       </div>
-      <h1 class="setup-title">Welcome to Honey Journal</h1>
-      <p class="setup-description">
-        Honey Journal is a private, offline-first trading journal. 
-        Select a local directory to store your journal entries and chart screenshots.
-      </p>
-      
-      <div class="setup-action-wrapper">
-        <button class="btn-primary btn-large" onclick="chooseStorageFolder()" style="height: 48px; padding: 0 24px; font-size: 14px; width: 100%; justify-content: center; border-radius: 100px;">
-          <i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i> Select Storage Folder
+
+      <!-- STEP 2 (Mobile): Permission granted, folder ready -->
+      <div id="setup-step-ready" style="display: none; flex-direction: column; align-items: center; gap: 22px;">
+        <div class="setup-icon" style="color: var(--color-bull);">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <h1 class="setup-title">All Set!</h1>
+        <p class="setup-description">
+          Your journal will be stored at:<br>
+          <code style="display: block; margin-top: 10px; padding: 10px 16px; background: var(--bg-secondary); border-radius: var(--radius-md); font-size: 12px; word-break: break-all; color: var(--accent-gold);">/storage/emulated/0/HoneyJournal</code><br>
+          This folder is accessible by Syncthing for seamless sync across your devices.
+        </p>
+        <button class="btn-primary btn-large" onclick="finalizeAndroidSetup()" style="height: 48px; padding: 0 24px; font-size: 14px; width: 100%; justify-content: center; border-radius: 100px;">
+          <i class="fa-solid fa-rocket" style="margin-right: 8px;"></i> Open Honey Journal
         </button>
+        <p class="setup-footer-note">Your data stays on your device. Fully offline, fully private.</p>
       </div>
-      
-      <p class="setup-footer-note">
-        Your data stays on your device. Fully offline, fully private.
-      </p>
+
+      <!-- STEP (Desktop): Folder picker -->
+      <div id="setup-step-desktop" style="display: none; flex-direction: column; align-items: center; gap: 22px;">
+        <div class="setup-icon">
+          <i class="fa-solid fa-folder-tree"></i>
+        </div>
+        <h1 class="setup-title">Welcome to Honey Journal</h1>
+        <p class="setup-description">
+          Honey Journal is a private, offline-first trading journal.
+          Select a local directory to store your journal entries and chart screenshots.
+        </p>
+        <div class="setup-action-wrapper" style="width: 100%;">
+          <button class="btn-primary btn-large" onclick="chooseStorageFolder()" style="height: 48px; padding: 0 24px; font-size: 14px; width: 100%; justify-content: center; border-radius: 100px;">
+            <i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i> Select Storage Folder
+          </button>
+        </div>
+        <p class="setup-footer-note">Your data stays on your device. Fully offline, fully private.</p>
+      </div>
+
     </div>
   </div>
 

@@ -181,39 +181,114 @@ function initPhoneClock() {
   setInterval(updateClock, 60000);
 }
 
-// First-Run Directory Manager
+// ---------------------------------------------------------------------------
+// PATH HELPER
+// Always use forward slashes — Rust's Path::new() handles them on Windows too
+// and they are the only valid separator on Android.
+// ---------------------------------------------------------------------------
+function joinPath(...parts) {
+  // Normalise any existing backslashes from saved desktop paths, then join
+  return parts
+    .map(p => p.replace(/\\/g, '/').replace(/\/+$/, ''))
+    .join('/');
+}
+
+// ---------------------------------------------------------------------------
+// DETECT PLATFORM
+// window.__TAURI__ is present in ALL Tauri builds (desktop + mobile).
+// We detect mobile by checking the user-agent for Android at runtime.
+// ---------------------------------------------------------------------------
+function isAndroid() {
+  return /android/i.test(navigator.userAgent);
+}
+
+// ---------------------------------------------------------------------------
+// FIRST-RUN SETUP — entry point called from DOMContentLoaded
+// ---------------------------------------------------------------------------
 async function checkStorageFolderSetup() {
   const savedPath = localStorage.getItem('honey_journal_storage_path');
   const setupOverlay = document.getElementById('setup-screen');
-  
+
   if (savedPath) {
     storagePath = savedPath;
     if (setupOverlay) setupOverlay.style.display = 'none';
-    
-    // Load Database & Render
     await loadDatabase();
     renderAll();
+    return;
+  }
+
+  // No path saved yet — show first-run setup
+  if (setupOverlay) setupOverlay.style.display = 'flex';
+
+  if (window.__TAURI__ && isAndroid()) {
+    // MOBILE path: check permission first, then auto-create folder
+    showSetupStep('permission');
+    const invoke = getTauriInvoke();
+    const alreadyGranted = await invoke('check_storage_permission').catch(() => false);
+    if (alreadyGranted) {
+      // Permission was already granted (re-install scenario) — skip straight to ready
+      showSetupStep('ready');
+    }
   } else {
-    // Show First-Run Directory Pick overlay
-    if (setupOverlay) setupOverlay.style.display = 'flex';
+    // DESKTOP path: show normal folder picker
+    showSetupStep('desktop');
   }
 }
 
-// Trigger directory open selection (Tauri invoke or fallback mockup prompts)
+// Show one of the three setup sub-panels
+function showSetupStep(step) {
+  ['permission', 'ready', 'desktop'].forEach(id => {
+    const el = document.getElementById(`setup-step-${id}`);
+    if (el) el.style.display = (id === step) ? 'flex' : 'none';
+  });
+}
+
+// ── Android: open the system "All files access" settings page ──────────────
+async function grantAndroidStoragePermission() {
+  if (!window.__TAURI__) return;
+  const invoke = getTauriInvoke();
+  try {
+    await invoke('request_storage_permission');
+    // Hide any previous error
+    const errEl = document.getElementById('setup-permission-error');
+    if (errEl) errEl.style.display = 'none';
+  } catch (err) {
+    console.error('Could not open settings:', err);
+  }
+}
+
+// ── Android: user says they have granted — verify and proceed ──────────────
+async function continueAfterPermissionGranted() {
+  if (!window.__TAURI__) return;
+  const invoke = getTauriInvoke();
+  const granted = await invoke('check_storage_permission').catch(() => false);
+  if (granted) {
+    showSetupStep('ready');
+    const errEl = document.getElementById('setup-permission-error');
+    if (errEl) errEl.style.display = 'none';
+  } else {
+    const errEl = document.getElementById('setup-permission-error');
+    if (errEl) errEl.style.display = 'block';
+  }
+}
+
+// ── Android: user taps "Open Honey Journal" after permission is confirmed ──
+async function finalizeAndroidSetup() {
+  const path = '/storage/emulated/0/HoneyJournal';
+  await setStoragePath(path);
+}
+
+// ── Desktop: native folder picker ─────────────────────────────────────────
 async function chooseStorageFolder() {
-  const setupOverlay = document.getElementById('setup-screen');
-  
   if (window.__TAURI__) {
-    // Open native folder dialog using Rust pick_folder command
     const invoke = getTauriInvoke();
     try {
       const selected = await invoke('select_folder');
       if (selected) {
-        setStoragePath(selected);
+        await setStoragePath(selected);
       }
     } catch (err) {
-      console.error("Tauri dialog error:", err);
-      // Fallback
+      console.error('Tauri dialog error:', err);
       mockFolderPrompt();
     }
   } else {
@@ -222,162 +297,130 @@ async function chooseStorageFolder() {
 }
 
 function mockFolderPrompt() {
-  const defaultMockPath = "d:\\CODE\\Journal";
-  const path = prompt("Enter a local directory path to store your journal files:", storagePath || defaultMockPath);
+  const defaultMockPath = 'd:/CODE/Journal';
+  const path = prompt('Enter a local directory path to store your journal files:', storagePath || defaultMockPath);
   if (path) {
     setStoragePath(path);
   }
 }
 
 async function setStoragePath(path) {
-  storagePath = path;
-  localStorage.setItem('honey_journal_storage_path', path);
-  
+  // Normalise to forward slashes
+  storagePath = path.replace(/\\/g, '/');
+  localStorage.setItem('honey_journal_storage_path', storagePath);
+
   const setupOverlay = document.getElementById('setup-screen');
   if (setupOverlay) setupOverlay.style.display = 'none';
-  
-  // Reload and draw UI
+
   await loadDatabase();
   renderAll();
 }
 
-// Database Operations
+// ---------------------------------------------------------------------------
+// DATABASE OPERATIONS
+// All paths use joinPath() which always produces forward-slash strings.
+// ---------------------------------------------------------------------------
 async function loadDatabase() {
   const seeds = window.HoneyJournalSeeds;
 
   if (window.__TAURI__ && storagePath) {
     const invoke = getTauriInvoke();
     try {
-      // Create entries directory if not exists using native command
-      await invoke('fs_create_dir', { path: `${storagePath}\\entries` });
+      // Create entries sub-directory
+      await invoke('fs_create_dir', { path: joinPath(storagePath, 'entries') });
 
       // Load tags.json
       try {
-        const tagsContent = await invoke('fs_read_text_file', { path: `${storagePath}\\tags.json` });
+        const tagsContent = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'tags.json') });
         tags = JSON.parse(tagsContent);
-      } catch (err) {
-        console.log("No tags.json found, loading seeds...");
+      } catch {
+        console.log('No tags.json found, seeding...');
         tags = seeds.initialTags;
         await saveTagsToDisk();
       }
 
       // Load attributes.json
       try {
-        const attrsContent = await invoke('fs_read_text_file', { path: `${storagePath}\\attributes.json` });
+        const attrsContent = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'attributes.json') });
         customAttributes = JSON.parse(attrsContent);
-      } catch (err) {
-        console.log("No attributes.json found, loading seeds...");
+      } catch {
+        console.log('No attributes.json found, seeding...');
         customAttributes = seeds.defaultCustomAttributes;
         await saveAttributesToDisk();
       }
 
-      // Load all files from entries directory
+      // Load all entry files
       try {
-        const filesContent = await invoke('fs_read_dir_json', { path: `${storagePath}\\entries` });
+        const filesContent = await invoke('fs_read_dir_json', { path: joinPath(storagePath, 'entries') });
         const tempEntries = [];
         for (const content of filesContent) {
-          try {
-            tempEntries.push(JSON.parse(content));
-          } catch (e) {
-            console.error("Error parsing entry JSON:", e);
-          }
+          try { tempEntries.push(JSON.parse(content)); } catch { /* skip corrupt file */ }
         }
-        
-        // If directory has entries, use them; otherwise, start empty
-        if (tempEntries.length > 0) {
-          entries = tempEntries;
-        } else {
-          console.log("Empty folder, starting with empty journal entries.");
-          entries = []; 
-        }
+        entries = tempEntries; // empty array = brand-new journal, that's fine
       } catch (err) {
-        console.error("Error reading entries directory:", err);
+        console.error('Error reading entries directory:', err);
         entries = [];
       }
-      
-      // Save local cache backup
+
+      // Mirror to localStorage as a fast-read cache
       localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
       localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
       localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
       return;
+
     } catch (err) {
-      console.error("Tauri load error, falling back to localStorage:", err);
+      console.error('Tauri filesystem error, falling back to localStorage:', err);
     }
   }
 
-  // Fallback to localStorage (Web/Mockup mode)
-  const localEntries = localStorage.getItem('honey_journal_entries');
-  const localTags = localStorage.getItem('honey_journal_tags');
+  // ---------------------------------------------------------------------------
+  // FALLBACK: browser localStorage (web preview / mockup mode only)
+  // ---------------------------------------------------------------------------
+  const localEntries   = localStorage.getItem('honey_journal_entries');
+  const localTags      = localStorage.getItem('honey_journal_tags');
   const localCustomAttrs = localStorage.getItem('honey_journal_custom_attrs');
 
-  if (localEntries) {
-    entries = JSON.parse(localEntries);
-  } else {
-    entries = seeds.initialEntries;
-    localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-  }
+  entries         = localEntries      ? JSON.parse(localEntries)      : seeds.initialEntries;
+  tags            = localTags         ? JSON.parse(localTags)         : seeds.initialTags;
+  customAttributes = localCustomAttrs ? JSON.parse(localCustomAttrs)  : seeds.defaultCustomAttributes;
 
-  if (localTags) {
-    tags = JSON.parse(localTags);
-  } else {
-    tags = seeds.initialTags;
-    localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-  }
+  if (!localEntries)      localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+  if (!localTags)         localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+  if (!localCustomAttrs)  localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
 
-  if (localCustomAttrs) {
-    customAttributes = JSON.parse(localCustomAttrs);
-  } else {
-    customAttributes = seeds.defaultCustomAttributes;
-    localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
-  }
-
-  // Migrate entries to support images array instead of single image string
-  entries.forEach(e => {
-    if (!e.images) {
-      e.images = e.image ? [e.image] : [];
-    }
-  });
+  // Migrate entries: old single-image string → images array
+  entries.forEach(e => { if (!e.images) e.images = e.image ? [e.image] : []; });
 }
 
 let saveTimeout = null;
 const entriesToSave = new Set();
 
 async function saveDatabase(specificEntry = null, saveAll = false, immediate = false) {
+  // Always write to localStorage as a backup cache
   localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
   localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
   localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
 
   if (window.__TAURI__ && storagePath) {
-    if (saveAll) {
-      entries.forEach(e => entriesToSave.add(e.id));
-    } else if (specificEntry) {
-      entriesToSave.add(specificEntry.id);
-    } else if (activeEntryId) {
-      entriesToSave.add(activeEntryId);
-    }
+    if (saveAll)          entries.forEach(e => entriesToSave.add(e.id));
+    else if (specificEntry) entriesToSave.add(specificEntry.id);
+    else if (activeEntryId) entriesToSave.add(activeEntryId);
 
     const performSave = async () => {
       await saveTagsToDisk();
       await saveAttributesToDisk();
-      
       const promises = [];
       for (const id of entriesToSave) {
         const entry = entries.find(e => e.id === id);
-        if (entry) {
-          promises.push(saveEntryToDisk(entry));
-        }
+        if (entry) promises.push(saveEntryToDisk(entry));
       }
       await Promise.all(promises);
       entriesToSave.clear();
     };
 
     if (saveTimeout) clearTimeout(saveTimeout);
-    
-    if (immediate) {
-      await performSave();
-    } else {
-      saveTimeout = setTimeout(performSave, 300);
-    }
+    if (immediate) await performSave();
+    else saveTimeout = setTimeout(performSave, 300);
   }
 }
 
@@ -385,46 +428,41 @@ async function saveTagsToDisk() {
   if (!window.__TAURI__ || !storagePath) return;
   const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
-    path: `${storagePath}\\tags.json`,
+    path: joinPath(storagePath, 'tags.json'),
     content: JSON.stringify(tags, null, 2)
-  }).catch(err => {
-    console.error("Failed to save tags.json:", err);
-  });
+  }).catch(err => console.error('Failed to save tags.json:', err));
 }
 
 async function saveAttributesToDisk() {
   if (!window.__TAURI__ || !storagePath) return;
   const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
-    path: `${storagePath}\\attributes.json`,
+    path: joinPath(storagePath, 'attributes.json'),
     content: JSON.stringify(customAttributes, null, 2)
-  }).catch(err => {
-    console.error("Failed to save attributes.json:", err);
-  });
+  }).catch(err => console.error('Failed to save attributes.json:', err));
 }
 
 async function saveEntryToDisk(entry) {
   if (!window.__TAURI__ || !storagePath) return;
   const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
-    path: `${storagePath}\\entries\\entry-${entry.id}.json`,
+    path: joinPath(storagePath, 'entries', `entry-${entry.id}.json`),
     content: JSON.stringify(entry, null, 2)
-  }).catch(err => {
-    console.error(`Failed to save entry ${entry.id}:`, err);
-  });
+  }).catch(err => console.error(`Failed to save entry ${entry.id}:`, err));
 }
 
 async function removeEntryFromDisk(entryId) {
   if (!window.__TAURI__ || !storagePath) return;
   const invoke = getTauriInvoke();
   await invoke('fs_remove_file', {
-    path: `${storagePath}\\entries\\entry-${entryId}.json`
-  }).catch(err => {
-    console.error(`Failed to delete entry ${entryId}:`, err);
-  });
+    path: joinPath(storagePath, 'entries', `entry-${entryId}.json`)
+  }).catch(err => console.error(`Failed to delete entry ${entryId}:`, err));
 }
 
+
+
 // Theme Controls
+
 function initTheme() {
   const savedTheme = localStorage.getItem('honey_journal_theme');
   let currentTheme = 'dark';

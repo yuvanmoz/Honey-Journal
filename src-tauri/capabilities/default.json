@@ -10,23 +10,43 @@
     "fs:default",
     {
       "identifier": "fs:allow-read",
-      "allow": [{ "path": "**" }]
+      "allow": [
+        { "path": "**" },
+        { "path": "/storage/emulated/0/**" },
+        { "path": "/storage/emulated/0/HoneyJournal/**" }
+      ]
     },
     {
       "identifier": "fs:allow-write",
-      "allow": [{ "path": "**" }]
+      "allow": [
+        { "path": "**" },
+        { "path": "/storage/emulated/0/**" },
+        { "path": "/storage/emulated/0/HoneyJournal/**" }
+      ]
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "**" }]
+      "allow": [
+        { "path": "**" },
+        { "path": "/storage/emulated/0/**" },
+        { "path": "/storage/emulated/0/HoneyJournal/**" }
+      ]
     },
     {
       "identifier": "fs:allow-remove",
-      "allow": [{ "path": "**" }]
+      "allow": [
+        { "path": "**" },
+        { "path": "/storage/emulated/0/**" },
+        { "path": "/storage/emulated/0/HoneyJournal/**" }
+      ]
     },
     {
       "identifier": "fs:allow-read-dir",
-      "allow": [{ "path": "**" }]
+      "allow": [
+        { "path": "**" },
+        { "path": "/storage/emulated/0/**" },
+        { "path": "/storage/emulated/0/HoneyJournal/**" }
+      ]
     }
   ]
 }
