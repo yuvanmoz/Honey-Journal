@@ -102,7 +102,7 @@ jobs:
 
       - name: Build Android App (.apk)
         run: |
-          npx tauri android build --apk
+          npx tauri android build --apk --debug
 
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
