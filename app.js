@@ -82,6 +82,87 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('detail-mistakes')?.addEventListener('blur', blurSave);
   document.getElementById('mobile-detail-notes')?.addEventListener('blur', blurSave);
   document.getElementById('mobile-detail-mistakes')?.addEventListener('blur', blurSave);
+
+  // Wheel scroll zoom for desktop repositioning
+  const desktopWrapper = document.getElementById('desktop-main-image-wrapper');
+  if (desktopWrapper) {
+    desktopWrapper.addEventListener('wheel', (e) => {
+      if (!repositionState.isActive || repositionState.platform !== 'desktop') return;
+      e.preventDefault();
+      const zoomSpeed = 0.05;
+      const delta = e.deltaY < 0 ? 1 : -1;
+      let newScale = repositionState.currentScale + delta * zoomSpeed;
+      newScale = Math.max(1.0, Math.min(5.0, newScale));
+      repositionState.currentScale = newScale;
+      updateRepositionTransform();
+    }, { passive: false });
+  }
+
+  // Mobile swipe gestures & pinch-to-zoom
+  const mobileWrapper = document.getElementById('mobile-main-image-wrapper');
+  if (mobileWrapper) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    mobileWrapper.addEventListener('touchstart', (e) => {
+      if (!repositionState.isActive) {
+        // Swipe gesture start
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        }
+      } else if (repositionState.platform === 'mobile') {
+        // Pinch gesture start
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          repositionState.startTouchDistance = Math.sqrt(dx * dx + dy * dy);
+          repositionState.startTouchScale = repositionState.currentScale;
+        }
+      }
+    }, { passive: false });
+
+    mobileWrapper.addEventListener('touchmove', (e) => {
+      if (repositionState.isActive && repositionState.platform === 'mobile') {
+        if (e.touches.length === 2 && repositionState.startTouchDistance) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const currentDistance = Math.sqrt(dx * dx + dy * dy);
+          const factor = currentDistance / repositionState.startTouchDistance;
+          let newScale = repositionState.startTouchScale * factor;
+          newScale = Math.max(1.0, Math.min(5.0, newScale));
+          repositionState.currentScale = newScale;
+          updateRepositionTransform();
+        }
+      }
+    }, { passive: false });
+
+    mobileWrapper.addEventListener('touchend', (e) => {
+      if (!repositionState.isActive) {
+        // Swipe gesture end
+        if (e.changedTouches.length === 1) {
+          const touchEndX = e.changedTouches[0].clientX;
+          const touchEndY = e.changedTouches[0].clientY;
+          const diffX = touchEndX - touchStartX;
+          const diffY = touchEndY - touchStartY;
+          
+          const minSwipeDistance = 50; // pixels
+          if (Math.abs(diffX) > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY)) {
+            if (diffX > 0) {
+              prevImage('mobile');
+            } else {
+              nextImage('mobile');
+            }
+          }
+        }
+      } else if (repositionState.platform === 'mobile') {
+        repositionState.startTouchDistance = null;
+        repositionState.startTouchScale = null;
+      }
+    }, { passive: true });
+  }
 });
 
 // Sync Clock for phone mockup
@@ -1216,6 +1297,7 @@ function renderDesktopDetail() {
       mainImgEl.style.transform = `scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px)`;
       if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
       document.getElementById('desktop-image-actions').style.display = 'flex';
+      document.getElementById('desktop-reposition-toggle').style.display = 'inline-flex';
       
       const hasNav = imgs.length > 1;
       document.getElementById('desktop-image-prev').style.display = hasNav ? 'flex' : 'none';
@@ -1225,7 +1307,9 @@ function renderDesktopDetail() {
       mainImgEl.style.display = 'none';
       mainImgEl.style.transform = 'none';
       if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
-      document.getElementById('desktop-image-actions').style.display = 'none';
+      document.getElementById('desktop-image-actions').style.display = 'flex';
+      document.getElementById('desktop-reposition-toggle').style.display = 'none';
+      document.getElementById('desktop-reposition-done').style.display = 'none';
       document.getElementById('desktop-image-prev').style.display = 'none';
       document.getElementById('desktop-image-next').style.display = 'none';
     }
@@ -1703,11 +1787,7 @@ function renderThumbnailStrip(entry, platform) {
     container.appendChild(thumb);
   });
 
-  const addBtn = document.createElement('div');
-  addBtn.className = 'thumbnail-item add-btn';
-  addBtn.onclick = () => triggerImageUpload(platform);
-  addBtn.innerHTML = `<i class="fa-solid fa-plus"></i>`;
-  container.appendChild(addBtn);
+  // removed addBtn button block
 }
 
 function clearDatabase() {
@@ -1895,6 +1975,7 @@ function renderMobileDetail() {
       mainImgEl.style.transform = `scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px)`;
       if (mainWrapper) mainWrapper.classList.remove('empty-placeholder');
       document.getElementById('mobile-image-actions').style.display = 'flex';
+      document.getElementById('mobile-reposition-toggle').style.display = 'inline-flex';
       
       const hasNav = imgs.length > 1;
       document.getElementById('mobile-image-prev').style.display = hasNav ? 'flex' : 'none';
@@ -1904,7 +1985,9 @@ function renderMobileDetail() {
       mainImgEl.style.display = 'none';
       mainImgEl.style.transform = 'none';
       if (mainWrapper) mainWrapper.classList.add('empty-placeholder');
-      document.getElementById('mobile-image-actions').style.display = 'none';
+      document.getElementById('mobile-image-actions').style.display = 'flex';
+      document.getElementById('mobile-reposition-toggle').style.display = 'none';
+      document.getElementById('mobile-reposition-done').style.display = 'none';
       document.getElementById('mobile-image-prev').style.display = 'none';
       document.getElementById('mobile-image-next').style.display = 'none';
     }
@@ -2175,8 +2258,15 @@ let repositionState = {
   currentY: 0,
   currentScale: 1.0,
   imgElement: null,
-  wrapperElement: null
+  wrapperElement: null,
+  startTouchDistance: null,
+  startTouchScale: null
 };
+
+function updateRepositionTransform() {
+  if (!repositionState.isActive || !repositionState.imgElement) return;
+  repositionState.imgElement.style.transform = `scale(${repositionState.currentScale}) translate(${repositionState.currentX}px, ${repositionState.currentY}px)`;
+}
 
 function toggleRepositionMode(platform) {
   if (repositionState.isActive) {
@@ -2204,16 +2294,17 @@ function toggleRepositionMode(platform) {
 
   wrapper.classList.add('repositioning-active');
   document.getElementById(`${platform}-reposition-instructions`).style.display = 'flex';
-  document.getElementById(`${platform}-reposition-zoom-box`).style.display = 'flex';
-  
-  const slider = document.getElementById(`${platform}-reposition-zoom-slider`);
-  if (slider) slider.value = repositionState.currentScale;
+  document.getElementById(`${platform}-reposition-done`).style.display = 'inline-flex';
 
   wrapper.addEventListener('mousedown', handleRepositionStart);
   wrapper.addEventListener('touchstart', handleRepositionStart, { passive: false });
 }
 
 function handleRepositionStart(e) {
+  if (e.touches && e.touches.length === 2) {
+    // Ignore and let pinch listener handle it
+    return;
+  }
   e.preventDefault();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -2229,6 +2320,10 @@ function handleRepositionStart(e) {
 
 function handleRepositionMove(e) {
   if (!repositionState.isActive) return;
+  if (e.touches && e.touches.length === 2) {
+    // Ignore drag panning when pinching
+    return;
+  }
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -2238,7 +2333,7 @@ function handleRepositionMove(e) {
   repositionState.currentX = targetX;
   repositionState.currentY = targetY;
 
-  repositionState.imgElement.style.transform = `scale(${repositionState.currentScale}) translate(${targetX}px, ${targetY}px)`;
+  updateRepositionTransform();
 }
 
 function handleRepositionEnd(e) {
@@ -2246,12 +2341,6 @@ function handleRepositionEnd(e) {
   window.removeEventListener('mouseup', handleRepositionEnd);
   window.removeEventListener('touchmove', handleRepositionMove);
   window.removeEventListener('touchend', handleRepositionEnd);
-}
-
-function handleRepositionZoom(platform, val) {
-  if (!repositionState.isActive) return;
-  repositionState.currentScale = parseFloat(val);
-  repositionState.imgElement.style.transform = `scale(${repositionState.currentScale}) translate(${repositionState.currentX}px, ${repositionState.currentY}px)`;
 }
 
 function saveReposition(platform) {
@@ -2275,7 +2364,7 @@ function saveReposition(platform) {
   }
 
   document.getElementById(`${platform}-reposition-instructions`).style.display = 'none';
-  document.getElementById(`${platform}-reposition-zoom-box`).style.display = 'none';
+  document.getElementById(`${platform}-reposition-done`).style.display = 'none';
 
   renderAll();
 }

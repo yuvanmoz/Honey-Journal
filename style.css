@@ -234,6 +234,37 @@ button, input, select, textarea {
     border: none !important;
     box-shadow: none !important;
   }
+
+  /* Safe Area paddings & Heights for notch / home indicators */
+  .phone-header {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    height: calc(48px + env(safe-area-inset-top, 0px)) !important;
+  }
+  .phone-detail-header {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    height: calc(48px + env(safe-area-inset-top, 0px)) !important;
+  }
+  .phone-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Native touch feeling responsiveness enhancements */
+  * {
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  body, button, i, select, a, .phone-header, .phone-bottom-nav {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  img {
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .phone-screen, .phone-detail-body {
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -483,6 +514,28 @@ button, input, select, textarea {
 }
 
 .btn-icon:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-focus);
+  color: var(--text-main);
+  transform: scale(1.05);
+}
+
+.btn-icon-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.btn-icon-sm:hover {
   background-color: var(--bg-tertiary);
   border-color: var(--border-focus);
   color: var(--text-main);
@@ -1895,16 +1948,13 @@ button, input, select, textarea {
   color: var(--accent-olive-hover);
 }
 
-.detail-chart-wrapper.empty-placeholder .chart-upload-overlay {
-  opacity: 1;
-  background-color: var(--bg-secondary);
-}
-
 .detail-chart-wrapper.empty-placeholder::after {
-  content: 'No screenshots added yet. Click to upload.';
+  content: 'No screenshots added yet.';
   position: absolute;
-  bottom: 20px;
-  font-size: 11px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
   color: var(--text-muted);
   width: 100%;
   text-align: center;

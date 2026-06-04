@@ -11,7 +11,7 @@ fn select_folder(app: tauri::AppHandle) -> Option<String> {
   }
   #[cfg(mobile)]
   {
-    Some("/storage/emulated/0/Documents/HoneyJournal".to_string())
+    Some("/storage/emulated/0/HoneyJournal".to_string())
   }
 }
 

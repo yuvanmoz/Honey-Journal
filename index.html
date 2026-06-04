@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Honey Journal</title>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -174,30 +174,18 @@
               <button class="image-nav-btn prev" id="desktop-image-prev" onclick="event.stopPropagation(); prevImage('desktop');" style="display: none;"><i class="fa-solid fa-chevron-left"></i></button>
               <button class="image-nav-btn next" id="desktop-image-next" onclick="event.stopPropagation(); nextImage('desktop');" style="display: none;"><i class="fa-solid fa-chevron-right"></i></button>
               
-              <!-- Upload Placeholder (only shows when empty) -->
-              <div class="chart-upload-overlay" onclick="triggerImageUpload('desktop')">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-                <span>Upload Screenshot</span>
-              </div>
-              
               <!-- Reposition Dragging Instructions overlay -->
               <div class="reposition-instructions-overlay" id="desktop-reposition-instructions" style="display: none;">
                 <i class="fa-solid fa-arrows-up-down-left-right"></i>
-                <span>Drag to align chart. Scroll or slide to zoom.</span>
+                <span>Drag to align chart. Scroll to zoom.</span>
               </div>
             </div>
             
             <!-- Actions bar containing dedicated small upload & reposition buttons -->
-            <div class="image-actions-bar" id="desktop-image-actions" style="display: none; justify-content: space-between; gap: 8px; margin-top: 6px;">
-              <button class="btn-secondary btn-sm" onclick="triggerImageUpload('desktop')" title="Upload new image"><i class="fa-solid fa-cloud-arrow-up"></i> Add Image</button>
-              <button class="btn-secondary btn-sm" id="desktop-reposition-toggle" onclick="toggleRepositionMode('desktop')" title="Reposition crop within card"><i class="fa-solid fa-arrows-up-down-left-right"></i> Reposition</button>
-            </div>
-            
-            <!-- Slider for reposition mode zoom -->
-            <div class="reposition-zoom-container" id="desktop-reposition-zoom-box" style="display: none; align-items: center; gap: 10px; margin-top: 6px; padding: 6px 10px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
-              <span style="font-size: 11px; color: var(--text-secondary);"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom:</span>
-              <input type="range" id="desktop-reposition-zoom-slider" min="1" max="3" step="0.05" value="1" oninput="handleRepositionZoom('desktop', this.value)" style="flex: 1;">
-              <button class="btn-primary btn-sm" onclick="saveReposition('desktop')" style="border-radius: 4px; padding: 3px 10px; font-size: 11px;">Done</button>
+            <div class="image-actions-bar" id="desktop-image-actions" style="display: none; align-items: center; gap: 8px; margin-top: 8px;">
+              <button class="btn-secondary btn-icon-sm" onclick="triggerImageUpload('desktop')" title="Upload Image"><i class="fa-solid fa-cloud-arrow-up"></i></button>
+              <button class="btn-secondary btn-icon-sm" id="desktop-reposition-toggle" onclick="toggleRepositionMode('desktop')" title="Reposition Crop"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+              <button class="btn-secondary btn-icon-sm" id="desktop-reposition-done" onclick="saveReposition('desktop')" style="display: none;" title="Save Reposition"><i class="fa-solid fa-check" style="color: var(--accent-olive);"></i></button>
             </div>
 
             <div class="thumbnail-strip" id="desktop-thumbnail-strip"></div>
@@ -360,29 +348,18 @@
                 <button class="image-nav-btn prev" id="mobile-image-prev" onclick="event.stopPropagation(); prevImage('mobile');" style="display: none;"><i class="fa-solid fa-chevron-left"></i></button>
                 <button class="image-nav-btn next" id="mobile-image-next" onclick="event.stopPropagation(); nextImage('mobile');" style="display: none;"><i class="fa-solid fa-chevron-right"></i></button>
                 
-                <div class="chart-upload-overlay" onclick="triggerImageUpload('mobile')">
-                  <i class="fa-solid fa-cloud-arrow-up"></i>
-                  <span>Upload Screenshot</span>
-                </div>
-                
                 <!-- Reposition Dragging Instructions overlay -->
                 <div class="reposition-instructions-overlay" id="mobile-reposition-instructions" style="display: none;">
                   <i class="fa-solid fa-arrows-up-down-left-right"></i>
-                  <span style="font-size: 10px;">Drag to align chart / Zoom below.</span>
+                  <span style="font-size: 10px;">Drag to align chart / Pinch to zoom.</span>
                 </div>
               </div>
 
               <!-- Actions bar containing dedicated small upload & reposition buttons -->
-              <div class="image-actions-bar" id="mobile-image-actions" style="display: none; justify-content: space-between; gap: 8px; margin-top: 6px;">
-                <button class="btn-secondary btn-sm" onclick="triggerImageUpload('mobile')" style="font-size: 11px; padding: 4px 8px;" title="Upload new image"><i class="fa-solid fa-cloud-arrow-up"></i> Add Image</button>
-                <button class="btn-secondary btn-sm" id="mobile-reposition-toggle" onclick="toggleRepositionMode('mobile')" style="font-size: 11px; padding: 4px 8px;" title="Reposition crop within card"><i class="fa-solid fa-arrows-up-down-left-right"></i> Reposition</button>
-              </div>
-              
-              <!-- Slider for reposition mode zoom -->
-              <div class="reposition-zoom-container" id="mobile-reposition-zoom-box" style="display: none; align-items: center; gap: 10px; margin-top: 6px; padding: 6px 10px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
-                <span style="font-size: 10px; color: var(--text-secondary);"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom:</span>
-                <input type="range" id="mobile-reposition-zoom-slider" min="1" max="3" step="0.05" value="1" oninput="handleRepositionZoom('mobile', this.value)" style="flex: 1;">
-                <button class="btn-primary btn-sm" onclick="saveReposition('mobile')" style="border-radius: 4px; padding: 3px 8px; font-size: 10px;">Done</button>
+              <div class="image-actions-bar" id="mobile-image-actions" style="display: none; align-items: center; gap: 8px; margin-top: 6px;">
+                <button class="btn-secondary btn-icon-sm" onclick="triggerImageUpload('mobile')" title="Upload Image"><i class="fa-solid fa-cloud-arrow-up"></i></button>
+                <button class="btn-secondary btn-icon-sm" id="mobile-reposition-toggle" onclick="toggleRepositionMode('mobile')" title="Reposition Crop"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+                <button class="btn-secondary btn-icon-sm" id="mobile-reposition-done" onclick="saveReposition('mobile')" style="display: none;" title="Save Reposition"><i class="fa-solid fa-check" style="color: var(--accent-olive);"></i></button>
               </div>
 
               <div class="thumbnail-strip" id="mobile-thumbnail-strip"></div>
