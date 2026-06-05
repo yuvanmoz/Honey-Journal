@@ -1,6 +1,6 @@
 [package]
 name = "honey-journal"
-version = "0.1.0"
+version = "1.0.1"
 description = "Private, offline-first trading journal focusing on chart setups"
 authors = ["Antigravity"]
 edition = "2021"

@@ -27,6 +27,8 @@ let currentCalendarMonth = new Date().getMonth();
 // View state
 let currentDesktopView = 'patterns'; // dashboard, patterns, calendar, stats, settings
 let currentMobileView = 'patterns';  // dashboard, patterns, calendar, stats, more
+let lastMobileView = 'patterns';
+let editingTagName = null;
 
 let desktopLayout = 'gallery'; // gallery, table
 let mobileLayout = 'gallery';  // mobile only supports gallery
@@ -52,6 +54,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Load Theme
   initTheme();
 
+  // Restore collapsible sidebar state
+  const isCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+  const sidebar = document.querySelector('.desktop-sidebar');
+  const collapseBtn = document.getElementById('sidebar-collapse-btn');
+  if (isCollapsed && sidebar) {
+    sidebar.classList.add('collapsed');
+    if (collapseBtn) {
+      collapseBtn.innerHTML = '<i class="fa-solid fa-angles-right"></i>';
+      collapseBtn.title = 'Expand Sidebar';
+    }
+  }
+
+  // Android Back Key Interceptor
+  if (isAndroid()) {
+    history.pushState({ page: 'main' }, '');
+    window.addEventListener('popstate', handleAndroidBack);
+  }
+
   // Dialog attributes event listener
   const typeSelect = document.getElementById('new-attr-type');
   const optionsWrapper = document.getElementById('new-attr-options-wrapper');
@@ -61,14 +81,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Click-out detail tag dropdowns
-  window.addEventListener('click', (e) => {
-    const isDropdownTrigger = e.target.closest('.tag-multiselect-trigger');
-    const isDropdown = e.target.closest('.tag-multiselect-dropdown');
-    if (!isDropdownTrigger && !isDropdown) {
-      document.querySelectorAll('.tag-multiselect-dropdown').forEach(d => d.classList.remove('open'));
-    }
-  });
+
+
 
   // Bind blur listener for instant saving on focus loss
   const blurSave = () => {
@@ -162,6 +176,16 @@ window.addEventListener('DOMContentLoaded', async () => {
         repositionState.startTouchScale = null;
       }
     }, { passive: true });
+  }
+
+  // Hide boot splash
+  const splash = document.getElementById('boot-splash');
+  if (splash) {
+    splash.style.opacity = '0';
+    splash.style.visibility = 'hidden';
+    setTimeout(() => {
+      splash.remove();
+    }, 400);
   }
 });
 
@@ -1293,6 +1317,25 @@ function renderDesktopSettings() {
         <button class="btn-secondary" onclick="chooseStorageFolder()"><i class="fa-solid fa-folder-open"></i> Change Folder</button>
       </div>
     </div>
+
+    <div class="settings-card" style="margin-top: 16px;">
+      <span class="settings-card-title">Backup & Restore</span>
+      <div class="settings-row">
+        <div class="settings-row-label">
+          <span>Export Backup (.zip)</span>
+          <span class="settings-row-sub">Package all setups, screenshots, and custom attributes into a ZIP file</span>
+        </div>
+        <button class="btn-primary" onclick="exportBackupZip()"><i class="fa-solid fa-file-zipper"></i> Export Data</button>
+      </div>
+      
+      <div class="settings-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+        <div class="settings-row-label">
+          <span>Import Backup (.zip)</span>
+          <span class="settings-row-sub">Restore all setups and database from a previously exported ZIP file (Warning: Overwrites existing data)</span>
+        </div>
+        <button class="btn-secondary" onclick="triggerImportZip()"><i class="fa-solid fa-file-import"></i> Import Data</button>
+      </div>
+    </div>
   `;
 }
 
@@ -1461,47 +1504,289 @@ function createAttributeRowHTML(label, innerHTML, iconClass, isCustom = false) {
 }
 
 function generateTagMultiSelectHTML(selectedPatterns) {
-  let selectedBadgesHtml = '';
+  // Build compact selected badges display
+  let badgesHtml = '';
   selectedPatterns.forEach(pat => {
     const tagObj = tags.find(t => t.name === pat) || { color: 'var(--text-muted)', bg: 'var(--bg-tertiary)' };
-    selectedBadgesHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg};">${pat}</span>`;
+    badgesHtml += `<span class="tag-badge" style="color: ${tagObj.color}; background-color: ${tagObj.bg};">${pat}</span>`;
   });
 
-  if (selectedPatterns.length === 0) {
-    selectedBadgesHtml = `<span style="color: var(--text-muted); font-size:12px;">+ Select Tags</span>`;
-  }
-
-  let dropdownItemsHtml = '';
-  tags.forEach(t => {
-    const isSelected = selectedPatterns.includes(t.name);
-    dropdownItemsHtml += `
-      <div class="tag-dropdown-item ${isSelected ? 'selected' : ''}" onclick="togglePatternTag('${t.name}')">
-        <span class="tag-badge" style="color: ${t.color}; background-color: ${t.bg};">${t.name}</span>
-        ${isSelected ? '<i class="fa-solid fa-check" style="font-size:10px;"></i>' : ''}
-      </div>
-    `;
-  });
+  const emptyHint = selectedPatterns.length === 0
+    ? `<span class="tag-picker-hint">Tap to add patterns</span>`
+    : '';
 
   return `
-    <div class="tag-multiselect-container">
-      <div class="tag-multiselect-trigger" onclick="toggleTagDropdown(this)">
-        ${selectedBadgesHtml}
+    <div class="tag-picker-trigger" onclick="openTagPickerPopup(event, this)" title="Edit patterns">
+      <div class="tag-picker-badges">
+        ${badgesHtml}${emptyHint}
       </div>
-      <div class="tag-multiselect-dropdown">
-        <div class="dropdown-scroll-area" style="max-height: 180px; overflow-y: auto;">
-          ${dropdownItemsHtml}
-        </div>
-        <input type="text" class="quick-tag-input" placeholder="Quick add pattern..." onkeydown="handleQuickAddTag(event, this)" onclick="event.stopPropagation();">
-        <button class="tag-create-btn" onclick="openAddTagDialog()" style="border-top: 1px solid var(--border-color); width: 100%; border-radius: 0; margin: 0; padding: 10px 12px; display: flex; justify-content: center; align-items: center; gap: 6px;"><i class="fa-solid fa-plus"></i> Custom Colors Dialog</button>
-      </div>
+      <i class="fa-solid fa-chevron-down tag-picker-chevron"></i>
     </div>
   `;
 }
 
-function toggleTagDropdown(trigger) {
-  const dropdown = trigger.nextElementSibling;
-  dropdown.classList.toggle('open');
+// ── Tag Picker Popup ────────────────────────────────────────────────────────
+let _tagPickerAnchor = null;
+let _selectedPopupColor = 'green';
+
+function openTagPickerPopup(event, triggerEl) {
+  event.stopPropagation();
+  closeTagPickerPopup(); // close any existing
+
+  _selectedPopupColor = 'green';
+  _tagPickerAnchor = triggerEl;
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return;
+
+  const popup = document.createElement('div');
+  popup.id = 'tag-picker-popup';
+  popup.className = 'tag-picker-popup';
+  popup.innerHTML = `
+    <div class="tag-picker-search-row">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" class="tag-picker-input" placeholder="Search or create pattern..." value="" oninput="refreshTagPickerPopup(this.value)" onkeydown="handleTagPickerKey(event, this)">
+    </div>
+    <div class="tag-picker-list"></div>
+    <div class="tag-picker-create-container"></div>
+  `;
+  document.body.appendChild(popup);
+
+  // Position below trigger
+  positionTagPickerPopup(triggerEl, popup);
+
+  // Populate initial list
+  refreshTagPickerPopup('');
+
+  // Focus the input
+  const input = popup.querySelector('.tag-picker-input');
+  if (input) input.focus();
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', _tagPickerOutsideClick);
+  }, 10);
 }
+
+function positionTagPickerPopup(triggerEl, popup) {
+  const rect = triggerEl.getBoundingClientRect();
+  const popW = 260;
+  let left = rect.left;
+  let top = rect.bottom + 4;
+
+  // Prevent going off right edge
+  if (left + popW > window.innerWidth - 8) {
+    left = window.innerWidth - popW - 8;
+  }
+  // Prevent going off bottom
+  const popH = 280;
+  if (top + popH > window.innerHeight - 8) {
+    top = rect.top - popH - 4;
+  }
+
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  popup.style.width = popW + 'px';
+}
+
+function refreshTagPickerPopup(query) {
+  const popup = document.getElementById('tag-picker-popup');
+  if (!popup) return;
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return;
+
+  const listContainer = popup.querySelector('.tag-picker-list');
+  const createContainer = popup.querySelector('.tag-picker-create-container');
+  if (!listContainer || !createContainer) return;
+
+  const lq = query.toLowerCase().trim();
+  const filtered = lq ? tags.filter(t => t.name.toLowerCase().includes(lq)) : tags;
+  const exactMatch = tags.find(t => t.name.toLowerCase() === lq);
+
+  // 1. Build List HTML
+  let listHtml = '';
+  if (filtered.length === 0 && !lq) {
+    listHtml = `<div class="tag-picker-empty">No patterns yet. Type to create one.</div>`;
+  } else {
+    filtered.forEach(t => {
+      const isSelected = entry.patterns.includes(t.name);
+      listHtml += `
+        <div class="tag-picker-item ${isSelected ? 'selected' : ''}" onclick="togglePatternTagFromPopup('${t.name}')">
+          <span class="tag-badge" style="color: ${t.color}; background-color: ${t.bg};">${t.name}</span>
+          ${isSelected ? '<i class="fa-solid fa-check tag-picker-check"></i>' : ''}
+          <div class="tag-picker-item-actions">
+            <button type="button" class="tag-picker-action-btn" onclick="startTagRenameFromPopup(event, '${t.name}')" title="Rename"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" class="tag-picker-action-btn del" onclick="deleteTagFromPopup(event, '${t.name}')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        </div>
+      `;
+    });
+  }
+  listContainer.innerHTML = listHtml;
+
+  // 2. Build Create Row HTML
+  let createHtml = '';
+  if (lq && !exactMatch) {
+    createHtml = `
+      <div class="tag-picker-create-row">
+        <span class="tag-picker-create-label">Create "${query}"</span>
+        <div class="tag-picker-colors">
+          <button type="button" class="tag-color-btn tag-color-green ${_selectedPopupColor === 'green' ? 'active' : ''}" data-color="green" onclick="selectPopupColor('green',this)" title="Bullish"></button>
+          <button type="button" class="tag-color-btn tag-color-red ${_selectedPopupColor === 'red' ? 'active' : ''}" data-color="red" onclick="selectPopupColor('red',this)" title="Bearish"></button>
+          <button type="button" class="tag-color-btn tag-color-blue ${_selectedPopupColor === 'blue' ? 'active' : ''}" data-color="blue" onclick="selectPopupColor('blue',this)" title="Both"></button>
+        </div>
+        <button type="button" class="tag-picker-add-btn" onclick="createTagFromPopup()" title="Add"><i class="fa-solid fa-plus"></i></button>
+      </div>
+    `;
+  }
+  createContainer.innerHTML = createHtml;
+}
+
+function handleTagPickerKey(event, inputEl) {
+  if (event.key === 'Escape') { closeTagPickerPopup(); return; }
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const popup = document.getElementById('tag-picker-popup');
+    const createBtn = popup && popup.querySelector('.tag-picker-add-btn');
+    if (createBtn) createBtn.click();
+    else {
+      // If Enter on exact existing tag, select it
+      const lq = inputEl.value.toLowerCase().trim();
+      const exact = tags.find(t => t.name.toLowerCase() === lq);
+      if (exact) togglePatternTagFromPopup(exact.name);
+    }
+  }
+}
+
+function togglePatternTagFromPopup(tagName) {
+  togglePatternTag(tagName);
+  // Refresh popup list
+  const popup = document.getElementById('tag-picker-popup');
+  if (!popup) return;
+  const input = popup.querySelector('.tag-picker-input');
+  const query = input ? input.value : '';
+  refreshTagPickerPopup(query);
+}
+
+function selectPopupColor(colorName, btnEl) {
+  _selectedPopupColor = colorName;
+  const group = btnEl.closest('.tag-picker-colors');
+  if (group) {
+    group.querySelectorAll('.tag-color-btn').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+}
+
+function createTagFromPopup() {
+  const popup = document.getElementById('tag-picker-popup');
+  if (!popup) return;
+  const input = popup.querySelector('.tag-picker-input');
+  const name = input ? input.value.trim() : '';
+  if (!name) return;
+  if (tags.some(t => t.name.toLowerCase() === name.toLowerCase())) return;
+
+  const activeColorBtn = popup.querySelector('.tag-picker-colors .tag-color-btn.active');
+  const colorName = activeColorBtn ? activeColorBtn.dataset.color : _selectedPopupColor;
+  let color = '#3b82f6', type = 'Both';
+  if (colorName === 'green') { color = '#10b981'; type = 'Bullish'; }
+  else if (colorName === 'red') { color = '#ef4444'; type = 'Bearish'; }
+
+  const hex = color.replace('#', '');
+  const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+  const bg = `rgba(${r},${g},${b},0.15)`;
+  tags.push({ name, color, bg, type });
+
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (entry && !entry.patterns.includes(name)) entry.patterns.push(name);
+
+  saveDatabase(entry, false, true);
+  renderAll();
+
+  // Clear search input and refresh popup list
+  if (input) {
+    input.value = '';
+    _selectedPopupColor = 'green';
+    refreshTagPickerPopup('');
+    input.focus();
+  }
+}
+
+function startTagRenameFromPopup(event, tagName) {
+  event.stopPropagation();
+  const popup = document.getElementById('tag-picker-popup');
+  if (!popup) return;
+  const item = popup.querySelector(`.tag-picker-item[onclick*="'${tagName}'"]`);
+  if (!item) return;
+
+  item.innerHTML = `
+    <input type="text" class="tag-picker-rename-input" value="${tagName}"
+      onkeydown="finishTagRenameFromPopup(event, '${tagName}', this)"
+      onclick="event.stopPropagation()">
+    <button type="button" class="tag-picker-action-btn" onclick="event.stopPropagation(); finishTagRenameFromPopup({key:'Enter'}, '${tagName}', this.previousElementSibling)" title="Save"><i class="fa-solid fa-check"></i></button>
+    <button type="button" class="tag-picker-action-btn" onclick="event.stopPropagation(); refreshTagPickerPopup(document.querySelector('.tag-picker-input')?.value || '')" title="Cancel"><i class="fa-solid fa-xmark"></i></button>
+  `;
+  const renameInput = item.querySelector('.tag-picker-rename-input');
+  if (renameInput) { renameInput.focus(); renameInput.select(); }
+}
+
+function finishTagRenameFromPopup(event, oldName, inputEl) {
+  if (event.key && event.key !== 'Enter') return;
+  event.preventDefault && event.preventDefault();
+  const newName = inputEl.value.trim();
+  if (!newName || newName === oldName) {
+    refreshTagPickerPopup(document.querySelector('.tag-picker-input')?.value || '');
+    return;
+  }
+  if (tags.some(t => t.name.toLowerCase() === newName.toLowerCase() && t.name !== oldName)) {
+    alert('A pattern with that name already exists.');
+    return;
+  }
+  const tag = tags.find(t => t.name === oldName);
+  if (tag) tag.name = newName;
+  entries.forEach(e => {
+    if (e.patterns) {
+      const idx = e.patterns.indexOf(oldName);
+      if (idx > -1) e.patterns[idx] = newName;
+    }
+  });
+  const activeEntry = entries.find(e => e.id === activeEntryId);
+  saveDatabase(activeEntry, false, true);
+  renderAll();
+
+  // Refresh popup list
+  refreshTagPickerPopup(document.querySelector('.tag-picker-input')?.value || '');
+}
+
+function deleteTagFromPopup(event, tagName) {
+  event.stopPropagation();
+  tags = tags.filter(t => t.name !== tagName);
+  entries.forEach(e => { if (e.patterns) e.patterns = e.patterns.filter(p => p !== tagName); });
+  const activeEntry = entries.find(e => e.id === activeEntryId);
+  saveDatabase(activeEntry, false, true);
+  renderAll();
+
+  // Refresh popup list
+  const popup = document.getElementById('tag-picker-popup');
+  if (popup) {
+    const input = popup.querySelector('.tag-picker-input');
+    const query = input ? input.value : '';
+    refreshTagPickerPopup(query);
+  }
+}
+
+function closeTagPickerPopup() {
+  const existing = document.getElementById('tag-picker-popup');
+  if (existing) existing.remove();
+  document.removeEventListener('click', _tagPickerOutsideClick);
+}
+
+function _tagPickerOutsideClick(e) {
+  const popup = document.getElementById('tag-picker-popup');
+  if (popup && !popup.contains(e.target) && !e.target.closest('.tag-picker-trigger')) {
+    closeTagPickerPopup();
+  }
+}
+
+
 
 function togglePatternTag(tagName) {
   const entry = entries.find(e => e.id === activeEntryId);
@@ -1620,77 +1905,202 @@ function deleteCustomAttributeField(attrName) {
   }
 }
 
-// Custom tags - uses bias chips now
-function openAddTagDialog() {
-  // Reset bias chips to default (Bullish)
-  const chipsGroup = document.getElementById('bias-chips-group');
-  if (chipsGroup) {
-    chipsGroup.querySelectorAll('.bias-chip').forEach(c => {
-      c.classList.remove('active-bull', 'active-bear', 'active-both');
+// Collapsible Sidebar Handler
+function toggleSidebarCollapse() {
+  const sidebar = document.querySelector('.desktop-sidebar');
+  const btn = document.getElementById('sidebar-collapse-btn');
+  if (!sidebar) return;
+  
+  const isCollapsed = sidebar.classList.toggle('collapsed');
+  
+  if (btn) {
+    btn.innerHTML = isCollapsed 
+      ? '<i class="fa-solid fa-angles-right"></i>' 
+      : '<i class="fa-solid fa-angles-left"></i>';
+    btn.title = isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar';
+  }
+  
+  localStorage.setItem('sidebar_collapsed', isCollapsed ? 'true' : 'false');
+}
+
+// Inline Tag Manager Helpers
+function selectInlineColor(colorName, btnEl) {
+  const group = btnEl.closest('.inline-tag-colors');
+  if (group) {
+    group.querySelectorAll('.tag-color-btn').forEach(btn => {
+      if (btn === btnEl) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
     });
-    const firstChip = chipsGroup.querySelector('[data-bias="Bullish"]');
-    if (firstChip) firstChip.classList.add('active-bull');
   }
-  document.getElementById('dialog-add-tag').classList.add('open');
 }
 
-function closeAddTagDialog() {
-  document.getElementById('dialog-add-tag').classList.remove('open');
-}
-
-// Bias chip selection handler
-function selectBiasChip(chipEl) {
-  const container = chipEl.closest('.bias-chips-container');
-  container.querySelectorAll('.bias-chip').forEach(c => {
-    c.classList.remove('active-bull', 'active-bear', 'active-both');
-  });
-  const bias = chipEl.dataset.bias;
-  if (bias === 'Bullish') chipEl.classList.add('active-bull');
-  else if (bias === 'Bearish') chipEl.classList.add('active-bear');
-  else chipEl.classList.add('active-both');
-}
-
-function submitAddTag() {
-  const nameEl = document.getElementById('new-tag-name');
-  // Get selected bias from chips
-  const chipsGroup = document.getElementById('bias-chips-group');
-  let biasGroup = 'Bullish';
-  const activeChip = chipsGroup.querySelector('.active-bull, .active-bear, .active-both');
-  if (activeChip) {
-    biasGroup = activeChip.dataset.bias;
-  }
-
-  const name = nameEl.value.trim();
-
+function submitInlineCreateTag(btnEl) {
+  const row = btnEl.closest('.inline-tag-create-row');
+  if (!row) return;
+  
+  const input = row.querySelector('.new-inline-tag-input');
+  const activeColorBtn = row.querySelector('.tag-color-btn.active');
+  
+  if (!input || !activeColorBtn) return;
+  
+  const name = input.value.trim();
   if (!name) {
     alert("Pattern name is required!");
     return;
   }
-
+  
+  if (tags.some(t => t.name.toLowerCase() === name.toLowerCase())) {
+    alert("This pattern already exists!");
+    return;
+  }
+  
+  const colorName = activeColorBtn.dataset.color;
   let color = '#3b82f6';
-  if (biasGroup === 'Bullish') color = '#10b981';
-  else if (biasGroup === 'Bearish') color = '#ef4444';
-
+  let type = 'Both';
+  if (colorName === 'green') {
+    color = '#10b981';
+    type = 'Bullish';
+  } else if (colorName === 'red') {
+    color = '#ef4444';
+    type = 'Bearish';
+  }
+  
   const hex = color.replace('#', '');
   const r = parseInt(hex.substring(0, 2), 16);
   const g = parseInt(hex.substring(2, 4), 16);
   const b = parseInt(hex.substring(4, 6), 16);
   const bg = `rgba(${r}, ${g}, ${b}, 0.15)`;
+  
+  tags.push({ name, color, bg, type });
+  
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (entry && !entry.patterns.includes(name)) {
+    entry.patterns.push(name);
+  }
+  
+  saveDatabase(entry, false, true);
+  renderAll();
+}
 
-  tags.push({ name, color, bg, type: biasGroup });
-  saveDatabase();
-
-  if (activeEntryId) {
-    const entry = entries.find(e => e.id === activeEntryId);
-    if (entry && !entry.patterns.includes(name)) {
-      entry.patterns.push(name);
-      saveDatabase();
+function handleInlineTagKey(event, inputEl) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const row = inputEl.closest('.inline-tag-create-row');
+    const addBtn = row?.querySelector('.inline-tag-add-btn');
+    if (addBtn) {
+      submitInlineCreateTag(addBtn);
     }
   }
+}
 
-  nameEl.value = '';
-  closeAddTagDialog();
+function inlineDeleteTag(tagName) {
+  tags = tags.filter(t => t.name !== tagName);
+  
+  entries.forEach(entry => {
+    if (entry.patterns) {
+      entry.patterns = entry.patterns.filter(p => p !== tagName);
+    }
+  });
+  
+  const activeEntry = entries.find(e => e.id === activeEntryId);
+  saveDatabase(activeEntry, false, true);
   renderAll();
+}
+
+function startInlineRename(tagName) {
+  editingTagName = tagName;
+  renderAll();
+}
+
+function finishInlineRename(oldName, newName) {
+  newName = newName.trim();
+  if (!newName || oldName === newName) {
+    editingTagName = null;
+    renderAll();
+    return;
+  }
+  
+  if (tags.some(t => t.name.toLowerCase() === newName.toLowerCase() && t.name !== oldName)) {
+    alert("A pattern with this name already exists.");
+    editingTagName = null;
+    renderAll();
+    return;
+  }
+  
+  const tag = tags.find(t => t.name === oldName);
+  if (tag) {
+    tag.name = newName;
+  }
+  
+  entries.forEach(entry => {
+    if (entry.patterns) {
+      const idx = entry.patterns.indexOf(oldName);
+      if (idx > -1) {
+        entry.patterns[idx] = newName;
+      }
+    }
+  });
+  
+  editingTagName = null;
+  const activeEntry = entries.find(e => e.id === activeEntryId);
+  saveDatabase(activeEntry, false, true);
+  renderAll();
+}
+
+function cancelInlineRename() {
+  editingTagName = null;
+  renderAll();
+}
+
+function handleInlineRenameKey(event, oldName, inputEl) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    finishInlineRename(oldName, inputEl.value);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelInlineRename();
+  }
+}
+
+function filterInlineTags(query) {
+  const container = document.getElementById('inline-tag-list-container');
+  if (!container) return;
+  const normalizedQuery = query.toLowerCase().trim();
+  const rows = container.querySelectorAll('.inline-tag-row');
+  rows.forEach(row => {
+    const tagName = row.dataset.tagName.toLowerCase();
+    if (tagName.includes(normalizedQuery)) {
+      row.style.display = 'flex';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+// Android Back Key Interceptor
+function handleAndroidBack(event) {
+  const detailPane = document.getElementById('mobile-detail-pane');
+  const detailOpen = detailPane && detailPane.classList.contains('open');
+  const setupOverlay = document.getElementById('setup-screen');
+  const setupVisible = setupOverlay && setupOverlay.style.display !== 'none';
+  const hasSavedPath = !!localStorage.getItem('honey_journal_storage_path');
+
+  if (detailOpen) {
+    closeMobileDetail();
+  } else if (currentMobileView === 'more') {
+    switchMobileView(lastMobileView || 'patterns');
+  } else if (currentMobileView !== 'patterns') {
+    switchMobileView('patterns');
+  } else if (setupVisible && hasSavedPath) {
+    if (setupOverlay) setupOverlay.style.display = 'none';
+  } else {
+    return;
+  }
+
+  history.pushState({ page: 'main' }, '');
 }
 
 // Toggling bookmarks
@@ -1845,6 +2255,9 @@ function clearDatabase() {
 // ==========================================================================
 
 function switchMobileView(view) {
+  if (currentMobileView !== 'more' && currentMobileView !== view) {
+    lastMobileView = currentMobileView;
+  }
   currentMobileView = view;
   
   const items = document.querySelectorAll('.phone-bottom-nav .phone-nav-item');
@@ -2257,6 +2670,14 @@ function renderMobileMore() {
     </div>
 
     <div class="settings-card" style="padding:12px; gap:8px; margin-top:12px;">
+      <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Backup & Restore</span>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn-primary" style="width:100%; font-size:11px; padding:6px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="exportBackupZip()"><i class="fa-solid fa-file-zipper"></i> Export Data (.zip)</button>
+        <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="triggerImportZip()"><i class="fa-solid fa-file-import"></i> Import Data (.zip)</button>
+      </div>
+    </div>
+
+    <div class="settings-card" style="padding:12px; gap:8px; margin-top:12px;">
       <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Data</span>
       <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px;" onclick="clearDatabase()">Reset All Data</button>
     </div>
@@ -2467,4 +2888,178 @@ function nextImage(platform) {
   if (!entry || !entry.images || entry.images.length <= 1) return;
   activeImageIndex = (activeImageIndex + 1) % entry.images.length;
   renderAll();
+}
+
+// ==========================================================================
+// BACKUP & RESTORE LOGIC (ZIP)
+// ==========================================================================
+
+function triggerImportZip() {
+  const input = document.getElementById('import-file-input');
+  if (input) input.click();
+}
+
+function getBase64Data(dataUrl) {
+  if (typeof dataUrl !== 'string') return null;
+  const matches = dataUrl.match(/^data:(image\/[a-z0-9-+.]+);base64,(.+)$/i);
+  if (!matches || matches.length < 3) return null;
+  return {
+    mimeType: matches[1],
+    base64: matches[2]
+  };
+}
+
+function exportBackupZip() {
+  if (typeof JSZip === 'undefined') {
+    alert("JSZip library is not loaded. Cannot perform ZIP export.");
+    return;
+  }
+
+  const zip = new JSZip();
+  zip.file('tags.json', JSON.stringify(tags, null, 2));
+  zip.file('attributes.json', JSON.stringify(customAttributes, null, 2));
+
+  const entriesFolder = zip.folder('entries');
+  const imagesFolder = zip.folder('images');
+
+  entries.forEach(e => {
+    // Clone entry to avoid mutating original state
+    const entryClone = JSON.parse(JSON.stringify(e));
+
+    if (entryClone.images && entryClone.images.length > 0) {
+      entryClone.images = entryClone.images.map((imgSrc, idx) => {
+        const b64Info = getBase64Data(imgSrc);
+        if (b64Info) {
+          let ext = 'png';
+          if (b64Info.mimeType.includes('jpeg') || b64Info.mimeType.includes('jpg')) ext = 'jpg';
+          else if (b64Info.mimeType.includes('gif')) ext = 'gif';
+          else if (b64Info.mimeType.includes('webp')) ext = 'webp';
+
+          const imgFilename = `entry-${e.id}_image-${idx}.${ext}`;
+          // Add binary file using the base64 content
+          imagesFolder.file(imgFilename, b64Info.base64, { base64: true });
+          // Map to relative path in ZIP folder structure
+          return `images/${imgFilename}`;
+        }
+        return imgSrc;
+      });
+    }
+
+    entriesFolder.file(`entry-${e.id}.json`, JSON.stringify(entryClone, null, 2));
+  });
+
+  zip.generateAsync({ type: 'blob' }).then(content => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `honey-journal-backup_${dateStr}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }).catch(err => {
+    console.error('ZIP generation failed:', err);
+    alert('Failed to generate backup ZIP: ' + err.message);
+  });
+}
+
+async function handleImportZip(input) {
+  if (typeof JSZip === 'undefined') {
+    alert("JSZip library is not loaded. Cannot perform ZIP import.");
+    input.value = '';
+    return;
+  }
+
+  const file = input.files[0];
+  if (!file) return;
+
+  if (!confirm("Importing this backup will overwrite all existing setups, patterns, and custom attributes. Do you want to proceed?")) {
+    input.value = '';
+    return;
+  }
+
+  try {
+    const zip = await JSZip.loadAsync(file);
+
+    // 1. Read tags.json
+    const tagsFile = zip.file('tags.json');
+    let importedTags = null;
+    if (tagsFile) {
+      const content = await tagsFile.async('text');
+      importedTags = JSON.parse(content);
+    }
+
+    // 2. Read attributes.json
+    const attrsFile = zip.file('attributes.json');
+    let importedAttrs = null;
+    if (attrsFile) {
+      const content = await attrsFile.async('text');
+      importedAttrs = JSON.parse(content);
+    }
+
+    // 3. Read entries
+    const entriesFolder = zip.folder('entries');
+    const importedEntries = [];
+
+    if (entriesFolder) {
+      const filePromises = [];
+      entriesFolder.forEach((relativePath, entryFile) => {
+        if (entryFile.name.endsWith('.json')) {
+          filePromises.push((async () => {
+            const content = await entryFile.async('text');
+            const entryObj = JSON.parse(content);
+            importedEntries.push(entryObj);
+          })());
+        }
+      });
+      await Promise.all(filePromises);
+    }
+
+    if (!importedTags || !importedAttrs) {
+      throw new Error("Missing tags.json or attributes.json inside the ZIP file. Invalid backup format.");
+    }
+
+    // 4. Restore base64 images from images/ folder
+    const imagesFolder = zip.folder('images');
+    if (imagesFolder && importedEntries.length > 0) {
+      const imgPromises = [];
+      importedEntries.forEach(entry => {
+        if (entry.images && entry.images.length > 0) {
+          entry.images.forEach((imgSrc, idx) => {
+            if (typeof imgSrc === 'string' && imgSrc.startsWith('images/')) {
+              const zipImgPath = imgSrc.replace('images/', '');
+              const imgFile = imagesFolder.file(zipImgPath);
+              if (imgFile) {
+                imgPromises.push((async () => {
+                  let mime = 'image/png';
+                  if (zipImgPath.endsWith('.jpg') || zipImgPath.endsWith('.jpeg')) mime = 'image/jpeg';
+                  else if (zipImgPath.endsWith('.gif')) mime = 'image/gif';
+                  else if (zipImgPath.endsWith('.webp')) mime = 'image/webp';
+
+                  const base64Content = await imgFile.async('base64');
+                  entry.images[idx] = `data:${mime};base64,${base64Content}`;
+                })());
+              }
+            }
+          });
+        }
+      });
+      await Promise.all(imgPromises);
+    }
+
+    // 5. Override state
+    tags = importedTags;
+    customAttributes = importedAttrs;
+    entries = importedEntries;
+
+    // 6. Save and reload
+    await saveDatabase(null, true, true);
+    renderAll();
+    alert("Data successfully imported! " + entries.length + " setups restored.");
+
+  } catch (err) {
+    console.error("ZIP import failed:", err);
+    alert("Failed to import ZIP backup: " + err.message);
+  } finally {
+    input.value = '';
+  }
 }

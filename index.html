@@ -8,8 +8,26 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Stylesheets -->
   <link rel="stylesheet" href="style.css">
+  <!-- Offline JSZip Library -->
+  <script src="jszip.min.js"></script>
+  <style>
+    html, body { background-color: #0d0f14; margin: 0; }
+    @keyframes splashPulse {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      100% { transform: scale(1.1); opacity: 1; }
+    }
+  </style>
 </head>
 <body>
+
+  <!-- Minimal Animated Boot Splash Loader -->
+  <div id="boot-splash" style="position:fixed;inset:0;background-color:#0d0f14;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity 0.4s ease,visibility 0.4s ease;">
+    <div style="text-align:center;">
+      <i class="fa-solid fa-cube" style="font-size:48px;color:#c9a227;animation:splashPulse 1.2s ease-in-out infinite alternate;"></i>
+      <div style="color:#c9a227;font-size:18px;font-weight:800;margin-top:12px;letter-spacing:-0.02em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Honey Journal</div>
+    </div>
+  </div>
+
 
   <!-- Prototype Viewport Container -->
   <main class="prototype-viewport" id="main-viewport">
@@ -21,24 +39,28 @@
       <!-- Sidebar -->
       <aside class="desktop-sidebar">
         <div class="sidebar-top">
-          <div class="sidebar-logo" onclick="switchDesktopView('patterns')">
+          <div class="sidebar-logo" onclick="switchDesktopView('patterns')" title="Honey Journal">
             <span class="sidebar-logo-text">
-              <i class="fa-solid fa-cube"></i> Honey Journal
+              <i class="fa-solid fa-cube"></i> <span class="logo-name">Honey Journal</span>
             </span>
           </div>
           
+          <button id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Collapse Sidebar">
+            <i class="fa-solid fa-angles-left"></i>
+          </button>
+          
           <nav class="sidebar-menu">
-            <div class="sidebar-item" id="nav-d-dashboard" onclick="switchDesktopView('dashboard')">
-              <i class="fa-solid fa-house"></i> Dashboard
+            <div class="sidebar-item" id="nav-d-dashboard" onclick="switchDesktopView('dashboard')" title="Dashboard">
+              <i class="fa-solid fa-house"></i> <span>Dashboard</span>
             </div>
-            <div class="sidebar-item active" id="nav-d-patterns" onclick="switchDesktopView('patterns')">
-              <i class="fa-solid fa-chart-simple"></i> Patterns
+            <div class="sidebar-item active" id="nav-d-patterns" onclick="switchDesktopView('patterns')" title="Patterns">
+              <i class="fa-solid fa-chart-simple"></i> <span>Patterns</span>
             </div>
-            <div class="sidebar-item" id="nav-d-calendar" onclick="switchDesktopView('calendar')">
-              <i class="fa-solid fa-calendar-days"></i> Calendar
+            <div class="sidebar-item" id="nav-d-calendar" onclick="switchDesktopView('calendar')" title="Calendar">
+              <i class="fa-solid fa-calendar-days"></i> <span>Calendar</span>
             </div>
-            <div class="sidebar-item" id="nav-d-stats" onclick="switchDesktopView('stats')">
-              <i class="fa-solid fa-chart-line"></i> Statistics
+            <div class="sidebar-item" id="nav-d-stats" onclick="switchDesktopView('stats')" title="Statistics">
+              <i class="fa-solid fa-chart-line"></i> <span>Statistics</span>
             </div>
           </nav>
         </div>
@@ -47,8 +69,8 @@
           <div class="sidebar-item" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
             <i class="fa-solid fa-moon"></i> <span>Theme Toggle</span>
           </div>
-          <div class="sidebar-item" id="nav-d-settings" onclick="switchDesktopView('settings')">
-            <i class="fa-solid fa-gear"></i> Settings
+          <div class="sidebar-item" id="nav-d-settings" onclick="switchDesktopView('settings')" title="Settings">
+            <i class="fa-solid fa-gear"></i> <span>Settings</span>
           </div>
         </div>
       </aside>
@@ -441,39 +463,6 @@
     </div>
   </div>
 
-  <!-- Dialog for creating new Tag -->
-  <div class="dialog-overlay" id="dialog-add-tag">
-    <div class="dialog-box">
-      <div class="dialog-title"><i class="fa-solid fa-tag" style="color: var(--accent-gold);"></i> Create New Pattern</div>
-      
-      <div style="display: flex; flex-direction: column; gap: 14px;">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <label style="font-size: 12px; color: var(--text-secondary);">Pattern Name</label>
-          <input type="text" class="input-text" id="new-tag-name" placeholder="e.g., VWAP Support, Hammer...">
-        </div>
-        
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <label style="font-size: 12px; color: var(--text-secondary);">Bias Group</label>
-          <div class="bias-chips-container" id="bias-chips-group">
-            <div class="bias-chip active-bull" data-bias="Bullish" onclick="selectBiasChip(this)">
-              <span class="bias-chip-dot" style="background: var(--color-bull);"></span> Bullish
-            </div>
-            <div class="bias-chip" data-bias="Bearish" onclick="selectBiasChip(this)">
-              <span class="bias-chip-dot" style="background: var(--color-bear);"></span> Bearish
-            </div>
-            <div class="bias-chip" data-bias="Both" onclick="selectBiasChip(this)">
-              <span class="bias-chip-dot" style="background: var(--color-both);"></span> Both
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="dialog-actions">
-        <button class="btn-secondary" onclick="closeAddTagDialog()">Cancel</button>
-        <button class="btn-primary" onclick="submitAddTag()">Create Pattern</button>
-      </div>
-    </div>
-  </div>
 
   <!-- First-Run Directory Chooser Overlay Screen -->
   <div class="setup-screen-overlay" id="setup-screen" style="display: none;">
@@ -546,6 +535,9 @@
     <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
     <img id="lightbox-img" class="lightbox-content" src="" alt="Zoomed view">
   </div>
+
+  <!-- Hidden File Input for ZIP Import -->
+  <input type="file" id="import-file-input" accept=".zip" style="display: none;" onchange="handleImportZip(this)">
 
   <!-- Scripts -->
   <script src="mockData.js"></script>
