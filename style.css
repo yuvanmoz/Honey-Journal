@@ -2842,3 +2842,292 @@ button, input, select, textarea {
 .tag-color-green { background-color: var(--color-bull); }
 .tag-color-red { background-color: var(--color-bear); }
 .tag-color-blue { background-color: var(--color-both); }
+
+/* ── Statistics Sub-Gallery & Lightbox Slider Upgrades ─────────────────────── */
+
+/* Lightbox wrapper image container */
+.lightbox-content-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 60px;
+  box-sizing: border-box;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10000;
+}
+.lightbox-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-50%) scale(1.05);
+}
+.lightbox-nav-btn.prev-btn {
+  left: 24px;
+}
+.lightbox-nav-btn.next-btn {
+  right: 24px;
+}
+
+/* Floating HUD */
+.lightbox-hud-top-left {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10000;
+  pointer-events: none;
+}
+.hud-status {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.hud-status.passed {
+  background-color: var(--color-bull);
+  color: #0c150c;
+}
+.hud-status.failed {
+  background-color: var(--color-bear);
+  color: #fff;
+}
+.hud-badge {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.hud-date {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 12px;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Collapsible Notes Drawer */
+.lightbox-notes-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  max-width: 90%;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: default;
+}
+.lightbox-notes-drawer.collapsed {
+  height: 48px;
+}
+.lightbox-notes-drawer.expanded {
+  height: 280px;
+}
+.drawer-header-bar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: none;
+  position: relative;
+}
+.drawer-drag-handle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+.drawer-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.drawer-toggle-icon {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  transition: transform 0.3s ease;
+}
+.lightbox-notes-drawer.expanded .drawer-toggle-icon {
+  transform: rotate(180deg);
+}
+.drawer-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.drawer-section label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+.drawer-text-content {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  min-height: 32px;
+}
+
+/* Sub-Gallery Styling */
+.subgallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.subgallery-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.subgallery-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--text-main);
+  margin: 0;
+}
+.subgallery-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.subgallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+.subgallery-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+.subgallery-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-gold);
+  box-shadow: var(--shadow-md);
+}
+.subgallery-img-wrapper {
+  width: 100%;
+  height: 150px;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-tertiary);
+}
+.subgallery-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+.subgallery-card:hover .subgallery-img {
+  transform: scale(1.03);
+}
+.subgallery-card-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.subgallery-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.subgallery-card-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 800px) {
+  .lightbox-notes-drawer {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+  }
+  .lightbox-nav-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+  .lightbox-nav-btn.prev-btn {
+    left: 10px;
+  }
+  .lightbox-nav-btn.next-btn {
+    right: 10px;
+  }
+  .lightbox-content-wrapper {
+    padding: 20px;
+  }
+  .subgallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .subgallery-title {
+    font-size: 18px;
+  }
+  .subgallery-img-wrapper {
+    height: 110px;
+  }
+}

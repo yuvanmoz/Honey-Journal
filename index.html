@@ -170,6 +170,11 @@
             <!-- Stats loads dynamically -->
           </div>
 
+          <!-- Desktop Pattern Sub-Gallery View -->
+          <div id="desktop-pattern-subgallery-view" style="display: none; padding: 24px;">
+            <!-- Dynamically populated sub-gallery -->
+          </div>
+
           <!-- Settings Pane -->
           <div class="settings-container" id="desktop-settings-view" style="display: none;">
             <!-- Settings loads dynamically -->
@@ -308,6 +313,11 @@
             <!-- Mobile Statistics View -->
             <div id="mobile-stats-view" style="display: none;">
               <!-- Stats Loads Dynamically -->
+            </div>
+
+            <!-- Mobile Pattern Sub-Gallery View -->
+            <div id="mobile-pattern-subgallery-view" style="display: none; padding: 12px;">
+              <!-- Dynamically populated sub-gallery -->
             </div>
 
             <!-- Mobile Dashboard View -->
@@ -531,9 +541,47 @@
   </div>
 
   <!-- Lightbox modal for premium image zoom -->
-  <div id="image-lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+  <div id="image-lightbox" class="lightbox-overlay" onclick="handleLightboxOverlayClick(event)" ontouchstart="handleLightboxTouchStart(event)" ontouchend="handleLightboxTouchEnd(event)">
     <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
-    <img id="lightbox-img" class="lightbox-content" src="" alt="Zoomed view">
+    
+    <!-- Floating HUD top-left -->
+    <div id="lightbox-hud" class="lightbox-hud-top-left" style="display: none;">
+      <span id="lightbox-hud-outcome" class="hud-status"></span>
+      <span id="lightbox-hud-bias" class="hud-badge"></span>
+      <span id="lightbox-hud-date" class="hud-date"></span>
+    </div>
+
+    <!-- Navigation arrows -->
+    <button id="lightbox-prev-btn" class="lightbox-nav-btn prev-btn" onclick="navigateLightbox(-1, event)" style="display: none;">
+      <i class="fa-solid fa-chevron-left"></i>
+    </button>
+    
+    <div class="lightbox-content-wrapper">
+      <img id="lightbox-img" class="lightbox-content" src="" alt="Zoomed view">
+    </div>
+
+    <button id="lightbox-next-btn" class="lightbox-nav-btn next-btn" onclick="navigateLightbox(1, event)" style="display: none;">
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+
+    <!-- Collapsible Notes/Mistakes Drawer -->
+    <div id="lightbox-notes-drawer" class="lightbox-notes-drawer collapsed" style="display: none;">
+      <div class="drawer-header-bar" onclick="toggleLightboxDrawer(event)">
+        <div class="drawer-drag-handle"></div>
+        <span class="drawer-title">Trade Details & Notes</span>
+        <span id="lightbox-drawer-toggle-icon" class="drawer-toggle-icon"><i class="fa-solid fa-chevron-up"></i></span>
+      </div>
+      <div class="drawer-scroll-content">
+        <div class="drawer-section">
+          <label>Notes</label>
+          <div id="lightbox-drawer-notes" class="drawer-text-content"></div>
+        </div>
+        <div class="drawer-section" style="margin-top: 12px;">
+          <label>Mistakes</label>
+          <div id="lightbox-drawer-mistakes" class="drawer-text-content"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Hidden File Input for ZIP Import -->

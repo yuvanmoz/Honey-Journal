@@ -20,6 +20,23 @@ let activeCalendarDate = null; // Filter setups by calendar date if set
 let storagePath = null;        // Sync/storage folder path on local disk
 
 let activeImageIndex = 0;
+let activePatternSubGallery = null;
+let currentSubGalleryImages = [];
+let activeLightboxIndex = 0;
+
+// Date Formatting Helper (local timezone safe)
+function formatDateWithDay(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const dateObj = new Date(year, month, day);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return `${dateStr} (${days[dateObj.getDay()]})`;
+}
+
 let currentCalendarYear = new Date().getFullYear();
 let currentCalendarMonth = new Date().getMonth();
 
@@ -553,6 +570,23 @@ function renderAll() {
   // Render Mobile Elements
   renderMobileContent();
   renderMobileDetail();
+
+  // Dynamically refresh active pattern subgallery if open
+  if (activePatternSubGallery) {
+    const patternEntries = entries.filter(e => e.patterns.includes(activePatternSubGallery) && e.images && e.images.length > 0);
+    currentSubGalleryImages = [];
+    patternEntries.forEach(entry => {
+      (entry.images || []).forEach((imgSrc, imgIndex) => {
+        currentSubGalleryImages.push({
+          src: imgSrc,
+          entry: entry,
+          imageIndex: imgIndex
+        });
+      });
+    });
+    renderPatternSubGallery('desktop');
+    renderPatternSubGallery('mobile');
+  }
 }
 
 // Sync filter selections between desktop and mobile variables
@@ -629,6 +663,10 @@ function switchDesktopView(view) {
   calendarView.style.display = 'none';
   statsView.style.display = 'none';
   settingsView.style.display = 'none';
+  
+  const subGalleryView = document.getElementById('desktop-pattern-subgallery-view');
+  if (subGalleryView) subGalleryView.style.display = 'none';
+  activePatternSubGallery = null;
 
   // Close calendar drawer when leaving calendar view
   if (view !== 'calendar') {
@@ -851,7 +889,7 @@ function renderDesktopGallery(list) {
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size:11px; color:var(--text-muted);">
-              <i class="fa-solid fa-calendar" style="margin-right:3px;"></i>${entry.date}
+              <i class="fa-solid fa-calendar" style="margin-right:3px;"></i>${formatDateWithDay(entry.date)}
             </span>
             ${plDisplay}
           </div>
@@ -908,7 +946,7 @@ function renderDesktopTable(list) {
       <td><span class="tag-badge" style="background-color: var(--bg-tertiary);">${entry.bias}</span></td>
       <td style="font-family: var(--font-display); font-weight:600; color: ${plColor};">${plDisplay}</td>
       <td class="status-${entry.status.toLowerCase()}">${entry.status}</td>
-      <td style="color: var(--text-secondary);">${entry.date}</td>
+      <td style="color: var(--text-secondary);">${formatDateWithDay(entry.date)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1039,7 +1077,9 @@ function handleCalendarDateClick(dateString) {
 function openCalendarDrawer(dateString) {
   const dateObj = new Date(dateString + 'T00:00:00');
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const formattedDate = `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayName = days[dateObj.getDay()];
+  const formattedDate = `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()} (${dayName})`;
 
   const dayEntries = entries.filter(e => e.date === dateString);
 
@@ -1249,7 +1289,7 @@ function renderDesktopStats(isDashboard = false) {
     let bullHtml = '';
     sortedBullish.forEach(([name, count], index) => {
       bullHtml += `
-        <div class="stats-rank-item">
+        <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
           <div class="stats-rank-label">
             <span class="stats-rank-number">${index + 1}.</span>
             <span>${name}</span>
@@ -1263,7 +1303,7 @@ function renderDesktopStats(isDashboard = false) {
     let bearHtml = '';
     sortedBearish.forEach(([name, count], index) => {
       bearHtml += `
-        <div class="stats-rank-item">
+        <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
           <div class="stats-rank-label">
             <span class="stats-rank-number">${index + 1}.</span>
             <span>${name}</span>
@@ -2082,13 +2122,19 @@ function filterInlineTags(query) {
 
 // Android Back Key Interceptor
 function handleAndroidBack(event) {
+  const lightbox = document.getElementById('image-lightbox');
+  const lightboxOpen = lightbox && lightbox.style.display === 'flex';
   const detailPane = document.getElementById('mobile-detail-pane');
   const detailOpen = detailPane && detailPane.classList.contains('open');
   const setupOverlay = document.getElementById('setup-screen');
   const setupVisible = setupOverlay && setupOverlay.style.display !== 'none';
   const hasSavedPath = !!localStorage.getItem('honey_journal_storage_path');
 
-  if (detailOpen) {
+  if (lightboxOpen) {
+    closeLightbox();
+  } else if (activePatternSubGallery !== null) {
+    closePatternSubGallery();
+  } else if (detailOpen) {
     closeMobileDetail();
   } else if (currentMobileView === 'more') {
     switchMobileView(lastMobileView || 'patterns');
@@ -2292,6 +2338,10 @@ function switchMobileView(view) {
   dashboard.style.display = 'none';
   more.style.display = 'none';
 
+  const subGalleryView = document.getElementById('mobile-pattern-subgallery-view');
+  if (subGalleryView) subGalleryView.style.display = 'none';
+  activePatternSubGallery = null;
+
   if (view !== 'calendar') {
     closeCalendarDrawer();
   }
@@ -2391,7 +2441,7 @@ function renderMobileGallery(list) {
           ${tagsHtml || `<span style="color: var(--text-muted); font-size: 9px;">No patterns</span>`}
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-          <span class="phone-card-date" style="font-size: 8px;">${entry.date}</span>
+          <span class="phone-card-date" style="font-size: 8px;">${formatDateWithDay(entry.date)}</span>
           <span class="tag-badge" style="font-size:8px; padding: 1px 4px; color: ${biasColor}; background-color: ${biasColor}1A; border: 1px solid ${biasColor}33;">${entry.bias}</span>
         </div>
       </div>
@@ -2564,7 +2614,7 @@ function renderMobileStats() {
   let bullHtml = '';
   sortedBullish.forEach(([name, count], index) => {
     bullHtml += `
-      <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;">
+      <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
         <div class="stats-rank-label">
           <span class="stats-rank-number">${index + 1}.</span>
           <span>${name}</span>
@@ -2578,7 +2628,7 @@ function renderMobileStats() {
   let bearHtml = '';
   sortedBearish.forEach(([name, count], index) => {
     bearHtml += `
-      <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;">
+      <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
         <div class="stats-rank-label">
           <span class="stats-rank-number">${index + 1}.</span>
           <span>${name}</span>
@@ -2685,16 +2735,167 @@ function renderMobileMore() {
 }
 
 // ==========================================================================
-// LIGHTBOX AND DOCKABLE ZOOM VIEWER
+// STATS SUB-GALLERY & LIGHTBOX SLIDER UPGRADES
 // ==========================================================================
+
+function openPatternSubGallery(patternName) {
+  activePatternSubGallery = patternName;
+  
+  // Render subgallery content
+  // First, find all entries with this pattern and with images
+  const patternEntries = entries.filter(e => e.patterns.includes(patternName) && e.images && e.images.length > 0);
+  
+  currentSubGalleryImages = [];
+  patternEntries.forEach(entry => {
+    (entry.images || []).forEach((imgSrc, imgIndex) => {
+      currentSubGalleryImages.push({
+        src: imgSrc,
+        entry: entry,
+        imageIndex: imgIndex
+      });
+    });
+  });
+
+  // Render for both desktop and mobile
+  renderPatternSubGallery('desktop');
+  renderPatternSubGallery('mobile');
+
+  // Toggle display containers
+  const dStatsView = document.getElementById('desktop-stats-view');
+  const dSubView = document.getElementById('desktop-pattern-subgallery-view');
+  if (dStatsView && dSubView) {
+    dStatsView.style.display = 'none';
+    dSubView.style.display = 'block';
+  }
+
+  const mStatsView = document.getElementById('mobile-stats-view');
+  const mSubView = document.getElementById('mobile-pattern-subgallery-view');
+  if (mStatsView && mSubView) {
+    mStatsView.style.display = 'none';
+    mSubView.style.display = 'block';
+  }
+}
+
+function closePatternSubGallery() {
+  activePatternSubGallery = null;
+
+  // Restore main Stats views
+  const dStatsView = document.getElementById('desktop-stats-view');
+  const dSubView = document.getElementById('desktop-pattern-subgallery-view');
+  if (dStatsView && dSubView) {
+    if (currentDesktopView === 'stats' || currentDesktopView === 'dashboard') {
+      dStatsView.style.display = 'block';
+    }
+    dSubView.style.display = 'none';
+  }
+
+  const mStatsView = document.getElementById('mobile-stats-view');
+  const mSubView = document.getElementById('mobile-pattern-subgallery-view');
+  if (mStatsView && mSubView) {
+    if (currentMobileView === 'stats') {
+      mStatsView.style.display = 'block';
+    }
+    mSubView.style.display = 'none';
+  }
+}
+
+function renderPatternSubGallery(platform) {
+  const containerId = platform === 'desktop' ? 'desktop-pattern-subgallery-view' : 'mobile-pattern-subgallery-view';
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const count = currentSubGalleryImages.length;
+  
+  let cardsHtml = '';
+  if (count === 0) {
+    cardsHtml = `
+      <div style="text-align: center; padding: 60px 20px; color: var(--text-muted); grid-column: 1/-1;">
+        <i class="fa-solid fa-image-portrait" style="font-size: 32px; margin-bottom: 12px; display: block; opacity: 0.4;"></i>
+        <div style="font-size: 14px; margin-bottom: 4px;">No images logged for this pattern</div>
+        <div style="font-size: 12px; opacity: 0.7;">Add setups with screenshots and tag them with this pattern to see them here.</div>
+      </div>
+    `;
+  } else {
+    currentSubGalleryImages.forEach((item, index) => {
+      const entry = item.entry;
+      let biasColor = 'var(--color-neutral)';
+      if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
+      else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
+      else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
+
+      cardsHtml += `
+        <div class="subgallery-card" onclick="openLightboxSlider(currentSubGalleryImages, ${index})">
+          <div class="subgallery-img-wrapper">
+            <img src="${item.src}" class="subgallery-img" loading="lazy">
+          </div>
+          <div class="subgallery-card-content">
+            <div class="subgallery-card-meta">
+              <span class="subgallery-card-date">
+                <i class="fa-solid fa-calendar"></i> ${formatDateWithDay(entry.date)}
+              </span>
+              <span class="tag-badge" style="background-color: ${biasColor}1A; color: ${biasColor}; border: 1px solid ${biasColor}33; font-size: 9px; padding: 1px 6px;">${entry.bias}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span class="tag-badge status-${entry.status.toLowerCase()}" style="font-size: 9px; padding: 1px 6px; font-weight: 700;">${entry.status}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  const backBtnHtml = platform === 'desktop'
+    ? `<button class="btn-secondary" style="margin-bottom: 16px; border-radius: 100px;" onclick="closePatternSubGallery()"><i class="fa-solid fa-arrow-left"></i> Back to Statistics</button>`
+    : `<button class="btn-icon" style="margin-bottom: 12px;" onclick="closePatternSubGallery()"><i class="fa-solid fa-arrow-left"></i></button>`;
+
+  const titleHeaderHtml = platform === 'desktop'
+    ? `
+      <div class="subgallery-header">
+        <div class="subgallery-header-left">
+          <h1 class="subgallery-title">${activePatternSubGallery}</h1>
+          <span class="subgallery-subtitle">Clutter-Free Visual Review &bull; ${count} screenshot${count !== 1 ? 's' : ''} found</span>
+        </div>
+      </div>
+    `
+    : `
+      <div style="margin-bottom: 12px;">
+        <h2 class="subgallery-title" style="font-size: 16px; margin: 0 0 4px 0;">${activePatternSubGallery}</h2>
+        <span class="subgallery-subtitle" style="font-size: 11px;">Visual Review &bull; ${count} image${count !== 1 ? 's' : ''}</span>
+      </div>
+    `;
+
+  container.innerHTML = `
+    ${backBtnHtml}
+    ${titleHeaderHtml}
+    <div class="subgallery-grid">
+      ${cardsHtml}
+    </div>
+  `;
+}
+
 function triggerLightboxZoom(src) {
   if (repositionState.isActive) return;
+  
+  // Try to find if this source belongs to any loaded entry image
+  let allImageItems = [];
+  
+  // Create virtual slider from entries that have images
+  entries.forEach(entry => {
+    (entry.images || []).forEach((imgSrc, imgIndex) => {
+      allImageItems.push({
+        src: imgSrc,
+        entry: entry,
+        imageIndex: imgIndex
+      });
+    });
+  });
 
-  const lightbox = document.getElementById('image-lightbox');
-  const lightboxImg = document.getElementById('lightbox-img');
-  if (lightbox && lightboxImg && src) {
-    lightboxImg.src = src;
-    lightbox.style.display = 'flex';
+  const matchedIndex = allImageItems.findIndex(item => item.src === src);
+  if (matchedIndex !== -1) {
+    openLightboxSlider(allImageItems, matchedIndex);
+  } else {
+    // Fallback: zoom single image without slider context
+    openLightboxSlider([{ src: src }], 0);
   }
 }
 
@@ -2704,6 +2905,152 @@ function closeLightbox() {
     lightbox.style.display = 'none';
   }
 }
+
+function openLightboxSlider(imagesList, startIndex) {
+  currentSubGalleryImages = imagesList;
+  activeLightboxIndex = startIndex;
+  
+  const lightbox = document.getElementById('image-lightbox');
+  if (lightbox) {
+    lightbox.style.display = 'flex';
+    renderActiveLightboxImage();
+  }
+}
+
+function renderActiveLightboxImage() {
+  const item = currentSubGalleryImages[activeLightboxIndex];
+  if (!item) return;
+
+  const lightboxImg = document.getElementById('lightbox-img');
+  if (lightboxImg) {
+    lightboxImg.src = item.src;
+  }
+
+  // Handle arrows visibility
+  const prevBtn = document.getElementById('lightbox-prev-btn');
+  const nextBtn = document.getElementById('lightbox-next-btn');
+  const hasMultiple = currentSubGalleryImages.length > 1;
+  if (prevBtn) prevBtn.style.display = hasMultiple ? 'flex' : 'none';
+  if (nextBtn) nextBtn.style.display = hasMultiple ? 'flex' : 'none';
+
+  // Render HUD
+  const hud = document.getElementById('lightbox-hud');
+  const hudOutcome = document.getElementById('lightbox-hud-outcome');
+  const hudBias = document.getElementById('lightbox-hud-bias');
+  const hudDate = document.getElementById('lightbox-hud-date');
+
+  if (item.entry) {
+    const entry = item.entry;
+    if (hud) hud.style.display = 'flex';
+    if (hudOutcome) {
+      hudOutcome.textContent = entry.status;
+      hudOutcome.className = `hud-status ${entry.status.toLowerCase()}`;
+    }
+    if (hudBias) {
+      hudBias.textContent = entry.bias;
+      let biasColor = 'var(--color-neutral)';
+      if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
+      else if (entry.bias === 'Bearish') biasColor = 'var(--color-bear)';
+      else if (entry.bias === 'Both') biasColor = 'var(--color-both)';
+      hudBias.style.borderColor = biasColor;
+      hudBias.style.color = biasColor;
+      hudBias.style.backgroundColor = biasColor + '1A';
+    }
+    if (hudDate) {
+      hudDate.textContent = formatDateWithDay(entry.date);
+    }
+
+    // Render Drawer
+    const drawer = document.getElementById('lightbox-notes-drawer');
+    const drawerNotes = document.getElementById('lightbox-drawer-notes');
+    const drawerMistakes = document.getElementById('lightbox-drawer-mistakes');
+
+    if (drawer) {
+      drawer.style.display = 'flex';
+      // Start in collapsed state when switching images
+      drawer.classList.remove('expanded');
+      drawer.classList.add('collapsed');
+      const toggleIcon = document.getElementById('lightbox-drawer-toggle-icon');
+      if (toggleIcon) toggleIcon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
+    }
+    if (drawerNotes) drawerNotes.textContent = entry.notes || 'No notes recorded.';
+    if (drawerMistakes) drawerMistakes.textContent = entry.mistakes || 'No mistakes recorded.';
+  } else {
+    // Hide HUD and drawer if no entry metadata (simple zoom)
+    if (hud) hud.style.display = 'none';
+    const drawer = document.getElementById('lightbox-notes-drawer');
+    if (drawer) drawer.style.display = 'none';
+  }
+}
+
+function navigateLightbox(direction, event) {
+  if (event) event.stopPropagation();
+  if (currentSubGalleryImages.length <= 1) return;
+
+  activeLightboxIndex = (activeLightboxIndex + direction + currentSubGalleryImages.length) % currentSubGalleryImages.length;
+  renderActiveLightboxImage();
+}
+
+function toggleLightboxDrawer(event) {
+  if (event) event.stopPropagation();
+  const drawer = document.getElementById('lightbox-notes-drawer');
+  const toggleIcon = document.getElementById('lightbox-drawer-toggle-icon');
+  if (drawer) {
+    const isCollapsed = drawer.classList.contains('collapsed');
+    if (isCollapsed) {
+      drawer.classList.remove('collapsed');
+      drawer.classList.add('expanded');
+      if (toggleIcon) toggleIcon.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+    } else {
+      drawer.classList.remove('expanded');
+      drawer.classList.add('collapsed');
+      if (toggleIcon) toggleIcon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
+    }
+  }
+}
+
+function handleLightboxOverlayClick(event) {
+  const isOverlay = event.target.id === 'image-lightbox' || event.target.classList.contains('lightbox-content-wrapper');
+  if (isOverlay) {
+    closeLightbox();
+  }
+}
+
+// Mobile swipe touch gestures
+let touchStartX = 0;
+let touchEndX = 0;
+
+function handleLightboxTouchStart(e) {
+  touchStartX = e.changedTouches[0].screenX;
+}
+
+function handleLightboxTouchEnd(e) {
+  touchEndX = e.changedTouches[0].screenX;
+  handleLightboxSwipeGesture();
+}
+
+function handleLightboxSwipeGesture() {
+  const threshold = 50;
+  if (touchEndX < touchStartX - threshold) {
+    navigateLightbox(1);
+  } else if (touchEndX > touchStartX + threshold) {
+    navigateLightbox(-1);
+  }
+}
+
+// Global Keydown Handler for Lightbox Arrow Navigation
+window.addEventListener('keydown', (e) => {
+  const lightbox = document.getElementById('image-lightbox');
+  if (lightbox && lightbox.style.display === 'flex') {
+    if (e.key === 'ArrowLeft') {
+      navigateLightbox(-1);
+    } else if (e.key === 'ArrowRight') {
+      navigateLightbox(1);
+    } else if (e.key === 'Escape') {
+      closeLightbox();
+    }
+  }
+});
 
 // ==========================================================================
 // IMAGE REPOSITIONING CONTROL SYSTEM
