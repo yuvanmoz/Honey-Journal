@@ -39,6 +39,7 @@ jobs:
           Copy-Item style.css dist/style.css
           Copy-Item app.js dist/app.js
           Copy-Item mockData.js dist/mockData.js
+          Copy-Item jszip.min.js dist/jszip.min.js
           Copy-Item -Recurse -Force Images dist/Images
 
       - name: Build Tauri App (.exe)
@@ -47,8 +48,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npm run tauri
-          tagName: v${{ github.run_number }}
-          releaseName: 'Honey Journal v${{ github.run_number }}'
+          tagName: v1.0.1-build${{ github.run_number }}
+          releaseName: 'Honey Journal v1.0.1 (Build ${{ github.run_number }})'
           releaseDraft: false
           prerelease: false
 
@@ -94,6 +95,7 @@ jobs:
           cp style.css dist/style.css
           cp app.js dist/app.js
           cp mockData.js dist/mockData.js
+          cp jszip.min.js dist/jszip.min.js
           cp -r Images dist/Images || true
 
       - name: Initialize Android mobile scaffolding
@@ -118,7 +120,7 @@ jobs:
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
+          tag_name: v1.0.1-build${{ github.run_number }}
           files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
