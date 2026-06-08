@@ -2291,8 +2291,8 @@ button, input, select, textarea {
 }
 .lightbox-close {
   position: absolute;
-  top: 20px;
-  right: 24px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: calc(20px + env(safe-area-inset-right, 0px));
   color: #FFFFFF;
   font-size: 32px;
   font-weight: 200;
@@ -2305,6 +2305,7 @@ button, input, select, textarea {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   transition: all 0.2s ease;
+  z-index: 10002;
 }
 .lightbox-close:hover {
   background: rgba(255, 255, 255, 0.2);
@@ -2889,8 +2890,8 @@ button, input, select, textarea {
 /* Floating HUD */
 .lightbox-hud-top-left {
   position: absolute;
-  top: 20px;
-  left: 24px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: calc(20px + env(safe-area-inset-left, 0px));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2932,67 +2933,88 @@ button, input, select, textarea {
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Collapsible Notes Drawer */
+/* Collapsible Notes Drawer - Upgraded to Premium Floating Glass Card */
 .lightbox-notes-drawer {
   position: absolute;
-  bottom: 0;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
-  width: 500px;
-  max-width: 90%;
-  background: rgba(17, 24, 39, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: none;
-  border-radius: 20px 20px 0 0;
-  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+  width: 450px;
+  max-width: 92%;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
   z-index: 10001;
   display: flex;
   flex-direction: column;
-  transition: height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   cursor: default;
+  overflow: hidden;
 }
+
 .lightbox-notes-drawer.collapsed {
-  height: 48px;
+  height: 44px;
+  width: 260px;
+  border-radius: 100px;
 }
+
 .lightbox-notes-drawer.expanded {
   height: 280px;
+  width: 480px;
 }
+
 .drawer-header-bar {
-  height: 48px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   user-select: none;
   position: relative;
 }
-.drawer-drag-handle {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 36px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
+
+.lightbox-notes-drawer.collapsed .drawer-header-bar {
+  border-bottom: none;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 16px;
 }
+
+.drawer-drag-handle {
+  display: none;
+}
+
 .drawer-title {
   font-size: 13px;
   font-weight: 600;
   color: #fff;
+  letter-spacing: 0.2px;
 }
+
+.lightbox-notes-drawer.collapsed .drawer-title::before {
+  content: "🍯 ";
+}
+.lightbox-notes-drawer.collapsed .drawer-title {
+  font-size: 12px;
+}
+
 .drawer-toggle-icon {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-  transition: transform 0.3s ease;
+  font-size: 11px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
 }
+
 .lightbox-notes-drawer.expanded .drawer-toggle-icon {
   transform: rotate(180deg);
 }
+
 .drawer-scroll-content {
   flex: 1;
   overflow-y: auto;
@@ -3000,26 +3022,39 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  opacity: 1;
+  transition: opacity 0.3s ease;
 }
+
+.lightbox-notes-drawer.collapsed .drawer-scroll-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .drawer-section label {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--accent-gold);
-  letter-spacing: 0.5px;
-  display: block;
-  margin-bottom: 4px;
+  letter-spacing: 0.8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
 }
+
 .drawer-text-content {
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.88);
   white-space: pre-wrap;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  min-height: 32px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 /* Sub-Gallery Styling */
@@ -3101,10 +3136,23 @@ button, input, select, textarea {
 }
 
 @media (max-width: 800px) {
-  .lightbox-notes-drawer {
-    width: 100%;
-    max-width: 100%;
-    border-radius: 16px 16px 0 0;
+  .lightbox-notes-drawer.expanded {
+    width: calc(100% - 32px);
+    height: 250px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    border-radius: 20px;
+  }
+  .lightbox-notes-drawer.collapsed {
+    width: 200px;
+    height: 38px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    border-radius: 100px;
+  }
+  .lightbox-notes-drawer.collapsed .drawer-title {
+    font-size: 11px;
+  }
+  .lightbox-notes-drawer.collapsed .drawer-header-bar {
+    height: 38px;
   }
   .lightbox-nav-btn {
     width: 40px;
