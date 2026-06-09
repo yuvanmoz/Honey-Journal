@@ -211,6 +211,7 @@
             <!-- Actions bar containing dedicated small upload & reposition buttons -->
             <div class="image-actions-bar" id="desktop-image-actions" style="display: none; align-items: center; gap: 8px; margin-top: 8px;">
               <button class="btn-secondary btn-icon-sm" onclick="triggerImageUpload('desktop')" title="Upload Image"><i class="fa-solid fa-cloud-arrow-up"></i></button>
+              <button class="btn-secondary btn-icon-sm" onclick="copyActiveImageToClipboard('desktop')" title="Copy to Clipboard"><i class="fa-solid fa-copy"></i></button>
               <button class="btn-secondary btn-icon-sm" id="desktop-reposition-toggle" onclick="toggleRepositionMode('desktop')" title="Reposition Crop"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
               <button class="btn-secondary btn-icon-sm" id="desktop-reposition-done" onclick="saveReposition('desktop')" style="display: none;" title="Save Reposition"><i class="fa-solid fa-check" style="color: var(--accent-olive);"></i></button>
             </div>
@@ -390,6 +391,7 @@
               <!-- Actions bar containing dedicated small upload & reposition buttons -->
               <div class="image-actions-bar" id="mobile-image-actions" style="display: none; align-items: center; gap: 8px; margin-top: 6px;">
                 <button class="btn-secondary btn-icon-sm" onclick="triggerImageUpload('mobile')" title="Upload Image"><i class="fa-solid fa-cloud-arrow-up"></i></button>
+                <button class="btn-secondary btn-icon-sm" onclick="copyActiveImageToClipboard('mobile')" title="Copy to Clipboard"><i class="fa-solid fa-copy"></i></button>
                 <button class="btn-secondary btn-icon-sm" id="mobile-reposition-toggle" onclick="toggleRepositionMode('mobile')" title="Reposition Crop"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
                 <button class="btn-secondary btn-icon-sm" id="mobile-reposition-done" onclick="saveReposition('mobile')" style="display: none;" title="Save Reposition"><i class="fa-solid fa-check" style="color: var(--accent-olive);"></i></button>
               </div>
@@ -586,6 +588,9 @@
 
   <!-- Hidden File Input for ZIP Import -->
   <input type="file" id="import-file-input" accept=".zip" style="display: none;" onchange="handleImportZip(this)">
+
+  <!-- Premium Toast notification container -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- Scripts -->
   <script src="mockData.js"></script>

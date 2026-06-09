@@ -328,6 +328,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Clipboard paste listener
+  window.addEventListener('paste', handleClipboardPaste);
+
   // Hide boot splash
   const splash = document.getElementById('boot-splash');
   if (splash) {
@@ -3579,4 +3582,99 @@ async function handleImportZip(input) {
   } finally {
     input.value = '';
   }
+}
+
+// ==========================================================================
+// CLIPBOARD INTERFACE & TOAST ALERTS SYSTEM
+// ==========================================================================
+
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast-message ${type}`;
+  
+  const icon = type === 'success' 
+    ? '<i class="fa-solid fa-circle-check" style="color: var(--color-bull);"></i>'
+    : '<i class="fa-solid fa-circle-xmark" style="color: var(--color-bear);"></i>';
+    
+  toast.innerHTML = `${icon} <span>${message}</span>`;
+  container.appendChild(toast);
+
+  // Auto remove toast after animation ends
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
+async function copyActiveImageToClipboard(platform) {
+  if (!activeEntryId) return;
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry || !entry.images || entry.images.length === 0) {
+    showToast('No screenshot to copy.', 'error');
+    return;
+  }
+
+  // Use the active image index in detail pane
+  const activeImgSrc = entry.images[activeImageIndex];
+  if (!activeImgSrc) {
+    showToast('No active image selected.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(activeImgSrc);
+    const blob = await res.blob();
+    
+    // navigator.clipboard.write takes an array of ClipboardItems
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [blob.type]: blob
+      })
+    ]);
+    showToast('Screenshot copied to clipboard!', 'success');
+  } catch (err) {
+    console.error('Clipboard copy failed:', err);
+    showToast('Failed to copy: ' + err.message, 'error');
+  }
+}
+
+function handleClipboardPaste(e) {
+  // Only handle paste if detail view pane is active and open
+  const dPane = document.getElementById('desktop-detail-pane');
+  const mPane = document.getElementById('mobile-detail-pane');
+  
+  const detailOpen = (dPane && !dPane.classList.contains('closed')) || (mPane && mPane.classList.contains('open'));
+  if (!activeEntryId || !detailOpen) return;
+
+  const items = e.clipboardData.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      const file = items[i].getAsFile();
+      if (file) {
+        e.preventDefault();
+        readAndAddPastedImage(file);
+        break;
+      }
+    }
+  }
+}
+
+function readAndAddPastedImage(file) {
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    const base64Src = event.target.result;
+    const entry = entries.find(e => e.id === activeEntryId);
+    if (entry) {
+      if (!entry.images) entry.images = [];
+      entry.images.push(base64Src);
+      activeImageIndex = entry.images.length - 1; // Show the newly pasted image immediately
+      entry.updatedAt = new Date().toISOString();
+      saveDatabase(entry);
+      renderAll();
+      showToast('Clipboard image pasted successfully!', 'success');
+    }
+  };
+  reader.readAsDataURL(file);
 }
