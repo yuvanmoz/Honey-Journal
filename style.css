@@ -3225,3 +3225,55 @@ button, input, select, textarea {
   from { transform: translateY(0); opacity: 1; }
   to { transform: translateY(-20px); opacity: 0; }
 }
+
+/* ── Sub-Gallery Playbook Card ─────────────────────────────────────────── */
+.subgallery-playbook-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.subgallery-playbook-card:hover {
+  border-color: var(--border-focus);
+}
+
+.playbook-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.02);
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.playbook-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.playbook-content {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.playbook-content.collapsed {
+  display: none;
+}
+
+.playbook-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
