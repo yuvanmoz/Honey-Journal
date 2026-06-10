@@ -1470,46 +1470,77 @@ function renderDesktopStats(isDashboard = false) {
   }
 }
 
-// Settings View - render storagePath dynamically
+// Settings View - render storagePath dynamically with Apple Settings list layout
 function renderDesktopSettings() {
   const container = document.getElementById('desktop-settings-view');
   if (!container) return;
   container.innerHTML = `
-    <div class="settings-card">
-      <span class="settings-card-title">Local Folder Connections</span>
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Journal Folder Path</span>
-          <span class="settings-row-sub">Directory where journal entries and image assets are stored</span>
+    <div class="apple-settings-group-title">Local Folder Connections</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #007aff;">
+            <i class="fa-solid fa-folder"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Journal Folder Path</span>
+            <span class="apple-settings-desc">Directory where journal entries and image assets are stored</span>
+          </div>
         </div>
-        <code style="background-color: var(--bg-secondary); padding: 6px 12px; border-radius: var(--radius-md); font-size: 12px;">${storagePath || 'Not Configured'}</code>
+        <div class="apple-settings-row-right">
+          <span class="apple-settings-value" style="background-color: rgba(255,255,255,0.03); padding: 4px 8px; border-radius: 6px; font-size: 11px; border: 1px solid var(--border-color);">${storagePath || 'Not Configured'}</span>
+        </div>
       </div>
       
-      <div class="settings-row" style="margin-top: 8px;">
-        <div class="settings-row-label">
-          <span>Change working directory</span>
-          <span class="settings-row-sub">Relocate the database and synced items</span>
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #34c759;">
+            <i class="fa-solid fa-folder-open"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Change Working Directory</span>
+            <span class="apple-settings-desc">Relocate the database and synced items</span>
+          </div>
         </div>
-        <button class="btn-secondary" onclick="chooseStorageFolder()"><i class="fa-solid fa-folder-open"></i> Change Folder</button>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 11px; padding: 4px 12px; border-radius: 100px;" onclick="chooseStorageFolder()">Change Folder</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 4px;"></i>
+        </div>
       </div>
     </div>
 
-    <div class="settings-card" style="margin-top: 16px;">
-      <span class="settings-card-title">Backup & Restore</span>
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Export Backup (.zip)</span>
-          <span class="settings-row-sub">Package all setups, screenshots, and custom attributes into a ZIP file</span>
+    <div class="apple-settings-group-title">Backup & Restore</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #ff9500;">
+            <i class="fa-solid fa-file-zipper"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Export Backup (.zip)</span>
+            <span class="apple-settings-desc">Package all setups, screenshots, and custom attributes into a ZIP file</span>
+          </div>
         </div>
-        <button class="btn-primary" onclick="exportBackupZip()"><i class="fa-solid fa-file-zipper"></i> Export Data</button>
+        <div class="apple-settings-row-right">
+          <button class="btn-primary" style="font-size: 11px; padding: 4px 12px; border-radius: 100px;" onclick="exportBackupZip()">Export Data</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 4px;"></i>
+        </div>
       </div>
       
-      <div class="settings-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-        <div class="settings-row-label">
-          <span>Import Backup (.zip)</span>
-          <span class="settings-row-sub">Restore all setups and database from a previously exported ZIP file (Warning: Overwrites existing data)</span>
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #ff3b30;">
+            <i class="fa-solid fa-file-import"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Import Backup (.zip)</span>
+            <span class="apple-settings-desc">Restore all setups and database from a previously exported ZIP file (Warning: Overwrites existing data)</span>
+          </div>
         </div>
-        <button class="btn-secondary" onclick="triggerImportZip()"><i class="fa-solid fa-file-import"></i> Import Data</button>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 11px; padding: 4px 12px; border-radius: 100px;" onclick="triggerImportZip()">Import Data</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 4px;"></i>
+        </div>
       </div>
     </div>
   `;
