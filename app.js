@@ -3006,19 +3006,19 @@ function renderPatternSubGallery(platform) {
 
   const playbookCardHtml = `
     <div class="subgallery-playbook-card">
-      <div class="playbook-header" onclick="togglePlaybookCollapse()">
+      <div class="playbook-header" onclick="togglePlaybookCollapse('${platform}')">
         <span><i class="fa-solid fa-book-open" style="margin-right:6px; color:var(--accent-gold);"></i> Setup Description & Guide</span>
-        <span id="playbook-toggle-icon"><i class="fa-solid fa-chevron-down"></i></span>
+        <span id="${platform}-playbook-toggle-icon"><i class="fa-solid fa-chevron-down"></i></span>
       </div>
-      <div id="playbook-content" class="playbook-content collapsed">
-        <div id="playbook-text-display" class="playbook-text">${description || '<span style="color:var(--text-muted); font-style:italic;">No description added yet. Click Edit below to write guidelines for this setup.</span>'}</div>
-        <div id="playbook-edit-container" style="display:none; flex-direction:column; gap:8px; margin-top:8px;">
-          <textarea id="playbook-textarea" class="textarea-control" style="min-height:100px; font-size:12px;" placeholder="Describe how to trade this pattern...">${description}</textarea>
+      <div id="${platform}-playbook-content" class="playbook-content collapsed">
+        <div id="${platform}-playbook-text-display" class="playbook-text">${description || '<span style="color:var(--text-muted); font-style:italic;">No description added yet. Click Edit below to write guidelines for this setup.</span>'}</div>
+        <div id="${platform}-playbook-edit-container" style="display:none; flex-direction:column; gap:8px; margin-top:8px;">
+          <textarea id="${platform}-playbook-textarea" class="textarea-control" style="min-height:100px; font-size:12px;" placeholder="Describe how to trade this pattern...">${description}</textarea>
         </div>
         <div style="margin-top:12px; display:flex; gap:8px;">
-          <button id="playbook-edit-btn" class="btn-secondary" style="font-size:11px; padding:4px 10px; border-radius:100px;" onclick="enablePlaybookEdit()"><i class="fa-solid fa-pen"></i> Edit Description</button>
-          <button id="playbook-save-btn" class="btn-primary" style="font-size:11px; padding:4px 10px; border-radius:100px; display:none;" onclick="savePlaybookDescription()"><i class="fa-solid fa-check"></i> Save</button>
-          <button id="playbook-cancel-btn" class="btn-secondary" style="font-size:11px; padding:4px 10px; border-radius:100px; display:none;" onclick="cancelPlaybookEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+          <button id="${platform}-playbook-edit-btn" class="btn-secondary" style="font-size:11px; padding:4px 10px; border-radius:100px;" onclick="enablePlaybookEdit('${platform}')"><i class="fa-solid fa-pen"></i> Edit Description</button>
+          <button id="${platform}-playbook-save-btn" class="btn-primary" style="font-size:11px; padding:4px 10px; border-radius:100px; display:none;" onclick="savePlaybookDescription('${platform}')"><i class="fa-solid fa-check"></i> Save</button>
+          <button id="${platform}-playbook-cancel-btn" class="btn-secondary" style="font-size:11px; padding:4px 10px; border-radius:100px; display:none;" onclick="cancelPlaybookEdit('${platform}')"><i class="fa-solid fa-xmark"></i> Cancel</button>
         </div>
       </div>
     </div>
@@ -3705,9 +3705,9 @@ function readAndAddPastedImage(file) {
 }
 
 // Playbook / Setup Guidelines Toggles & Saves
-function togglePlaybookCollapse() {
-  const content = document.getElementById('playbook-content');
-  const icon = document.getElementById('playbook-toggle-icon');
+function togglePlaybookCollapse(platform) {
+  const content = document.getElementById(`${platform}-playbook-content`);
+  const icon = document.getElementById(`${platform}-playbook-toggle-icon`);
   if (content && icon) {
     if (content.classList.contains('collapsed')) {
       content.classList.remove('collapsed');
@@ -3719,26 +3719,26 @@ function togglePlaybookCollapse() {
   }
 }
 
-function enablePlaybookEdit() {
-  document.getElementById('playbook-text-display').style.display = 'none';
-  document.getElementById('playbook-edit-container').style.display = 'flex';
-  document.getElementById('playbook-edit-btn').style.display = 'none';
-  document.getElementById('playbook-save-btn').style.display = 'inline-flex';
-  document.getElementById('playbook-cancel-btn').style.display = 'inline-flex';
-  const textarea = document.getElementById('playbook-textarea');
+function enablePlaybookEdit(platform) {
+  document.getElementById(`${platform}-playbook-text-display`).style.display = 'none';
+  document.getElementById(`${platform}-playbook-edit-container`).style.display = 'flex';
+  document.getElementById(`${platform}-playbook-edit-btn`).style.display = 'none';
+  document.getElementById(`${platform}-playbook-save-btn`).style.display = 'inline-flex';
+  document.getElementById(`${platform}-playbook-cancel-btn`).style.display = 'inline-flex';
+  const textarea = document.getElementById(`${platform}-playbook-textarea`);
   if (textarea) textarea.focus();
 }
 
-function cancelPlaybookEdit() {
-  document.getElementById('playbook-text-display').style.display = 'block';
-  document.getElementById('playbook-edit-container').style.display = 'none';
-  document.getElementById('playbook-edit-btn').style.display = 'inline-flex';
-  document.getElementById('playbook-save-btn').style.display = 'none';
-  document.getElementById('playbook-cancel-btn').style.display = 'none';
+function cancelPlaybookEdit(platform) {
+  document.getElementById(`${platform}-playbook-text-display`).style.display = 'block';
+  document.getElementById(`${platform}-playbook-edit-container`).style.display = 'none';
+  document.getElementById(`${platform}-playbook-edit-btn`).style.display = 'inline-flex';
+  document.getElementById(`${platform}-playbook-save-btn`).style.display = 'none';
+  document.getElementById(`${platform}-playbook-cancel-btn`).style.display = 'none';
 }
 
-function savePlaybookDescription() {
-  const textarea = document.getElementById('playbook-textarea');
+function savePlaybookDescription(platform) {
+  const textarea = document.getElementById(`${platform}-playbook-textarea`);
   if (!textarea) return;
   const newDesc = textarea.value.trim();
 
@@ -3753,11 +3753,13 @@ function savePlaybookDescription() {
     renderPatternSubGallery('desktop');
     renderPatternSubGallery('mobile');
     
-    // Keep container expanded after load
-    const content = document.getElementById('playbook-content');
-    if (content) content.classList.remove('collapsed');
-    const icon = document.getElementById('playbook-toggle-icon');
-    if (icon) icon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
+    // Keep container expanded after load on both views
+    ['desktop', 'mobile'].forEach(plat => {
+      const content = document.getElementById(`${plat}-playbook-content`);
+      if (content) content.classList.remove('collapsed');
+      const icon = document.getElementById(`${plat}-playbook-toggle-icon`);
+      if (icon) icon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
+    });
     
     showToast('Setup description updated successfully!', 'success');
   }

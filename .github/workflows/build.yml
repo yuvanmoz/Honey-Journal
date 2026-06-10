@@ -102,6 +102,10 @@ jobs:
         run: |
           CI=true npx tauri android init
 
+      - name: Copy Android Launcher Icons
+        run: |
+          cp -r src-tauri/icons/android/* src-tauri/gen/android/app/src/main/res/
+
       - name: Inject Android Manage External Storage Permission
         run: |
           MANIFEST_PATH="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
