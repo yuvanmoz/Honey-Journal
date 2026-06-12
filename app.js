@@ -342,10 +342,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     let isPulling = false;
 
     const isScrollAtTop = () => {
-      const activeViewId = `mobile-${currentMobileView}-view`;
-      const viewEl = document.getElementById(activeViewId);
-      if (viewEl) {
-        return viewEl.scrollTop === 0;
+      const contentArea = document.getElementById('mobile-content-area');
+      if (contentArea) {
+        return contentArea.scrollTop === 0;
       }
       return true;
     };
@@ -361,6 +360,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (!isPulling) return;
       const currentY = e.touches[0].clientY;
       const deltaY = currentY - pullStartY;
+
+      if (deltaY < 0) {
+        // User scrolled up (scrolling content down), cancel pull-to-refresh
+        isPulling = false;
+        pullToRefresh.style.height = '0px';
+        return;
+      }
 
       if (deltaY > 0) {
         e.preventDefault();
@@ -388,10 +394,21 @@ window.addEventListener('DOMContentLoaded', async () => {
         await loadDatabase().catch(() => {});
         renderAll();
 
+        // Stop spinning and change text to Refreshed! with checkmark icon
+        pullToRefreshText.textContent = 'Refreshed!';
+        spinner?.classList.remove('spinning');
+        if (spinner) {
+          spinner.className = 'fa-solid fa-circle-check spinner-ref';
+        }
+
         setTimeout(() => {
           pullToRefresh.style.height = '0px';
-          spinner?.classList.remove('spinning');
-          showToast('Data refreshed successfully!', 'success');
+          // Restore spinner icon class after sliding out
+          setTimeout(() => {
+            if (spinner) {
+              spinner.className = 'fa-solid fa-arrows-rotate spinner-ref';
+            }
+          }, 200);
         }, 800);
       } else {
         pullToRefresh.style.height = '0px';
@@ -807,9 +824,18 @@ function syncFilterSelectors() {
   if (dPattern) dPattern.value = filterPattern;
   if (dSort) dSort.value = sortOrder;
 
-  if (mBias) mBias.value = filterBias;
-  if (mPattern) mPattern.value = filterPattern;
-  if (mSort) mSort.value = sortOrder;
+  if (mBias) {
+    mBias.value = filterBias;
+    mBias.classList.toggle('active-filter', filterBias !== 'all');
+  }
+  if (mPattern) {
+    mPattern.value = filterPattern;
+    mPattern.classList.toggle('active-filter', filterPattern !== 'all');
+  }
+  if (mSort) {
+    mSort.value = sortOrder;
+    mSort.classList.toggle('active-filter', sortOrder !== 'newest');
+  }
 }
 
 // Populate pattern dropdown options dynamically

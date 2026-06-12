@@ -252,8 +252,9 @@ button, input, select, textarea {
     height: calc(48px + env(safe-area-inset-top, 0px)) !important;
   }
   .phone-bottom-nav {
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-    height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    height: 64px !important;
+    padding-bottom: 0 !important;
   }
 
   /* Native touch feeling responsiveness enhancements */
@@ -271,6 +272,28 @@ button, input, select, textarea {
   }
   .phone-screen, .phone-detail-body {
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Unified Mobile Backgrounds */
+  .phone-screen {
+    background-color: var(--bg-app) !important;
+  }
+  .phone-header {
+    background-color: var(--bg-app) !important;
+    border-bottom: none !important;
+  }
+  .phone-tabs-bar {
+    background-color: var(--bg-app) !important;
+  }
+  .phone-detail-view {
+    background-color: var(--bg-app) !important;
+  }
+  .phone-detail-header {
+    background-color: var(--bg-app) !important;
+    border-bottom: none !important;
+  }
+  .phone-detail-body {
+    background-color: var(--bg-app) !important;
   }
 }
 
@@ -1468,24 +1491,32 @@ button, input, select, textarea {
   transform: scale(0.95);
 }
 
-/* ── Samsung One UI 8.5 Floating Dock ───────────────────────────────────── */
+/* ── Floating Navigation Dock (Apple Inspired) ──────────────────────────── */
 .phone-bottom-nav {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  height: 58px;
-  background-color: rgba(26, 26, 32, 0.78);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
-  border-radius: 28px;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  height: 64px;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 32px;
   display: flex;
   align-items: center;
   justify-content: space-around;
   z-index: 100;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.1);
-  padding: 0 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  padding: 0 12px;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Dark Theme Overrides for Dock Container */
+[data-theme="dark"] .phone-bottom-nav {
+  background-color: rgba(30, 30, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .phone-nav-item {
@@ -1493,45 +1524,48 @@ button, input, select, textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  font-size: 8px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #8e8e93; /* Neutral gray for inactive */
   cursor: pointer;
   flex: 1;
   height: 100%;
-  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: color 0.25s ease;
   position: relative;
 }
 
 .phone-nav-item i {
-  font-size: 18px;
-  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-size: 20px;
+  color: #8e8e93; /* Neutral gray for inactive icon */
+  transition: color 0.25s ease, transform 0.2s ease;
 }
 
-.phone-nav-item:hover i,
-.phone-nav-item:active i {
-  transform: translateY(-3px) scale(1.1);
+/* Inactive color overrides for dark theme */
+[data-theme="dark"] .phone-nav-item,
+[data-theme="dark"] .phone-nav-item i {
+  color: #888888;
 }
 
+/* Active State: Clean iOS Blue */
 .phone-nav-item.active {
-  color: #fff;
+  color: #007aff; /* Bright blue active color */
 }
 
 .phone-nav-item.active i {
-  color: var(--accent-gold);
-  filter: drop-shadow(0 0 8px rgba(212, 163, 37, 0.5));
+  color: #007aff;
+  filter: none; /* Remove glowing glow effect */
 }
 
+/* Dark Theme Active State: Slightly lighter blue for readability */
+[data-theme="dark"] .phone-nav-item.active,
+[data-theme="dark"] .phone-nav-item.active i {
+  color: #3b82f6; /* Beautiful readable dark theme blue */
+}
+
+/* Remove the active gold/yellow dot indicator completely */
 .phone-nav-item.active::after {
-  content: "";
-  position: absolute;
-  bottom: 6px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background-color: var(--accent-gold);
-  box-shadow: 0 0 6px var(--accent-gold);
+  display: none !important;
 }
 
 /* ── Mobile Detail Overlay ─────────────────────────────────────────────── */
@@ -3237,27 +3271,48 @@ button, input, select, textarea {
   pointer-events: none;
 }
 .toast-message {
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 100px;
-  padding: 10px 20px;
-  color: #fff;
-  font-size: 13px;
+  padding: 8px 18px;
+  color: #007aff; /* Match active blue of light dock */
+  font-size: 11.5px;
   font-weight: 600;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   gap: 8px;
   pointer-events: auto;
   animation: toastFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1), toastFadeOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) 2.7s forwards;
+  transition: all 0.3s ease;
+}
+.toast-message i {
+  font-size: 13px;
+  color: inherit !important;
 }
 .toast-message.success {
-  border-left: 3px solid var(--color-bull);
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
 }
 .toast-message.error {
-  border-left: 3px solid var(--color-bear);
+  color: #ff3b30;
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Dark Theme Overrides for Toasts */
+[data-theme="dark"] .toast-message {
+  background-color: rgba(30, 30, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  color: #3b82f6; /* Match active blue of dark dock */
+}
+[data-theme="dark"] .toast-message.success {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .toast-message.error {
+  color: #ff453a;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 @keyframes toastFadeIn {
   from { transform: translateY(-20px); opacity: 0; }
@@ -3430,5 +3485,69 @@ button, input, select, textarea {
   padding-bottom: 96px !important;
 }
 
+/* Mobile Filter Selects - Pill Shapes styled like the Dock */
+.mobile-filter-select {
+  flex: 1;
+  height: 38px;
+  border-radius: 19px; /* Pill shape */
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  text-align-last: center;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  color: #8e8e93 !important; /* Gray inactive text */
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: none !important; /* Remove down arrow so text is perfectly centered */
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
 
+/* Active State: matching active dock blue color */
+.mobile-filter-select.active-filter {
+  color: #007aff !important; /* Blue active text */
+  border-color: rgba(0, 122, 255, 0.15) !important;
+  background-color: rgba(255, 255, 255, 1) !important;
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.08) !important;
+}
 
+/* Dark Theme Overrides */
+[data-theme="dark"] .mobile-filter-select {
+  background-color: rgba(30, 30, 30, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  color: #888888 !important;
+}
+
+[data-theme="dark"] .mobile-filter-select.active-filter {
+  color: #3b82f6 !important; /* Blue active text in dark theme */
+  border-color: rgba(59, 130, 246, 0.2) !important;
+  background-color: rgba(40, 40, 40, 0.95) !important;
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.15) !important;
+}
+/* Pull-to-refresh compact floating pill (matching bottom dock style) */
+.pull-refresh-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px; /* Compact pill shape */
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  color: #007aff; /* Match active blue of light dock */
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
+  pointer-events: auto; /* Allow clicks/taps if needed */
+}
+
+/* Dark Theme Overrides */
+[data-theme="dark"] .pull-refresh-pill {
+  background-color: rgba(30, 30, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  color: #3b82f6; /* Match active blue of dark dock */
+}

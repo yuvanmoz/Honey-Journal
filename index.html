@@ -271,10 +271,12 @@
             </div>
           </header>
 
-          <!-- Pull to Refresh Indicator -->
-          <div id="pull-to-refresh" style="height: 0px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); transition: height 0.15s ease; color: var(--accent-gold); font-size: 11px; font-weight: 600; gap: 8px; border-bottom: 1px solid var(--border-color); width: 100%;">
-            <i class="fa-solid fa-arrows-rotate spinner-ref" style="font-size: 12px;"></i>
-            <span id="pull-to-refresh-text">Pull to refresh...</span>
+          <!-- Pull to Refresh Indicator Container -->
+          <div id="pull-to-refresh" style="height: 0px; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: height 0.15s ease; width: 100%; position: absolute; top: calc(48px + env(safe-area-inset-top, 0px)); left: 0; z-index: 95; pointer-events: none;">
+            <div class="pull-refresh-pill">
+              <i class="fa-solid fa-arrows-rotate spinner-ref" style="font-size: 11px;"></i>
+              <span id="pull-to-refresh-text">Pull to refresh...</span>
+            </div>
           </div>
 
           <!-- Mobile Filters Panel (Dropdowns) -->
@@ -285,20 +287,20 @@
               <input type="text" class="search-input" id="mobile-search" placeholder="Search patterns..." oninput="handleMobileSearch()" style="width: 100%;">
             </div>
             
-            <div style="display: flex; gap: 4px; width: 100%;" id="mobile-dropdown-filters">
-              <select class="input-select" id="mobile-filter-bias" onchange="handleFilterChange()" style="flex:1; padding: 4px; font-size:11px;">
+            <div style="display: flex; gap: 8px; width: 100%;" id="mobile-dropdown-filters">
+              <select class="input-select mobile-filter-select" id="mobile-filter-bias" onchange="handleFilterChange()">
                 <option value="all">All Biases</option>
                 <option value="Bullish">Bullish</option>
                 <option value="Bearish">Bearish</option>
                 <option value="Both">Both</option>
               </select>
 
-              <select class="input-select" id="mobile-filter-pattern" onchange="handleFilterChange()" style="flex:1; padding: 4px; font-size:11px;">
+              <select class="input-select mobile-filter-select" id="mobile-filter-pattern" onchange="handleFilterChange()">
                 <option value="all">All Patterns</option>
                 <!-- populated dynamically -->
               </select>
 
-              <select class="input-select" id="mobile-sort" onchange="handleSortChange(this.value)" style="flex:1; padding: 4px; font-size:11px;">
+              <select class="input-select mobile-filter-select" id="mobile-sort" onchange="handleSortChange(this.value)">
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
               </select>
