@@ -46,21 +46,67 @@ fn check_storage_permission() -> bool {
 // "Allow management of all files" for this app.
 // Uses the Android Activity Manager shell tool (available on all Android versions).
 #[tauri::command]
-fn request_storage_permission() -> Result<(), String> {
+fn request_storage_permission(app: tauri::AppHandle) -> Result<(), String> {
   #[cfg(target_os = "android")]
   {
-    std::process::Command::new("am")
-      .args([
-        "start",
-        "-a", "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION",
-        "-d", "package:com.honeyjournal.app",
-      ])
-      .spawn()
-      .map_err(|e| e.to_string())?;
+    use tauri::Manager;
+    use jni::objects::JValue;
+
+    let webview_window = app.get_webview_window("main")
+      .ok_or_else(|| "Failed to get main webview window".to_string())?;
+
+    webview_window.with_webview(|webview| {
+      webview.jni_handle().exec(move |env, context, _webview| {
+        // 1. Find classes
+        let intent_class = env.find_class("android/content/Intent").unwrap();
+        let settings_class = env.find_class("android/provider/Settings").unwrap();
+
+        // 2. Get static action string Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
+        let action_field = env.get_static_field(
+          settings_class,
+          "ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION",
+          "Ljava/lang/String;"
+        ).unwrap();
+        let action_str = action_field.l().unwrap();
+
+        // 3. Create Intent: new Intent(action)
+        let intent = env.new_object(
+          intent_class,
+          "(Ljava/lang/String;)V",
+          &[JValue::Object(&action_str)]
+        ).unwrap();
+
+        // 4. Create Uri: Uri.parse("package:com.honeyjournal.app")
+        let uri_class = env.find_class("android/net/Uri").unwrap();
+        let package_uri_str = env.new_string("package:com.honeyjournal.app").unwrap();
+        let package_uri = env.call_static_method(
+          uri_class,
+          "parse",
+          "(Ljava/lang/String;)Landroid/net/Uri;",
+          &[JValue::Object(&package_uri_str)]
+        ).unwrap().l().unwrap();
+
+        // 5. Set data: intent.setData(package_uri)
+        env.call_method(
+          &intent,
+          "setData",
+          "(Landroid/net/Uri;)Landroid/content/Intent;",
+          &[JValue::Object(&package_uri)]
+        ).unwrap();
+
+        // 6. Start activity: context.startActivity(intent)
+        env.call_method(
+          context,
+          "startActivity",
+          "(Landroid/content/Intent;)V",
+          &[JValue::Object(&intent)]
+        ).unwrap();
+      });
+    }).map_err(|e| e.to_string())?;
   }
   #[cfg(not(target_os = "android"))]
   {
-    // nothing to do on desktop
+    let _ = app; // suppress unused warning
   }
   Ok(())
 }

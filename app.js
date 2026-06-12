@@ -331,6 +331,74 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Clipboard paste listener
   window.addEventListener('paste', handleClipboardPaste);
 
+  // Swipe to Refresh gesture for Mobile
+  const phoneScreen = document.getElementById('phone-screen-pane');
+  const pullToRefresh = document.getElementById('pull-to-refresh');
+  const pullToRefreshText = document.getElementById('pull-to-refresh-text');
+  const spinner = pullToRefresh?.querySelector('.spinner-ref');
+
+  if (phoneScreen && pullToRefresh) {
+    let pullStartY = 0;
+    let isPulling = false;
+
+    const isScrollAtTop = () => {
+      const activeViewId = `mobile-${currentMobileView}-view`;
+      const viewEl = document.getElementById(activeViewId);
+      if (viewEl) {
+        return viewEl.scrollTop === 0;
+      }
+      return true;
+    };
+
+    phoneScreen.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1 && isScrollAtTop()) {
+        pullStartY = e.touches[0].clientY;
+        isPulling = true;
+      }
+    }, { passive: true });
+
+    phoneScreen.addEventListener('touchmove', (e) => {
+      if (!isPulling) return;
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - pullStartY;
+
+      if (deltaY > 0) {
+        e.preventDefault();
+        const height = Math.min(deltaY * 0.45, 60);
+        pullToRefresh.style.height = `${height}px`;
+
+        if (height >= 50) {
+          pullToRefreshText.textContent = 'Release to refresh...';
+        } else {
+          pullToRefreshText.textContent = 'Pull to refresh...';
+        }
+      }
+    }, { passive: false });
+
+    phoneScreen.addEventListener('touchend', async () => {
+      if (!isPulling) return;
+      isPulling = false;
+      const currentHeight = parseFloat(pullToRefresh.style.height) || 0;
+
+      if (currentHeight >= 50) {
+        pullToRefresh.style.height = '45px';
+        pullToRefreshText.textContent = 'Refreshing...';
+        spinner?.classList.add('spinning');
+
+        await loadDatabase().catch(() => {});
+        renderAll();
+
+        setTimeout(() => {
+          pullToRefresh.style.height = '0px';
+          spinner?.classList.remove('spinning');
+          showToast('Data refreshed successfully!', 'success');
+        }, 800);
+      } else {
+        pullToRefresh.style.height = '0px';
+      }
+    }, { passive: true });
+  }
+
   // Hide boot splash
   const splash = document.getElementById('boot-splash');
   if (splash) {
@@ -1543,6 +1611,9 @@ function renderDesktopSettings() {
         </div>
       </div>
     </div>
+    <div style="text-align: center; margin-top: 32px; padding-bottom: 16px;">
+      <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Version 1.0.1</span>
+    </div>
   `;
 }
 
@@ -2526,11 +2597,11 @@ function switchMobileView(view) {
     stats.style.display = 'block';
     renderMobileStats();
   } else if (view === 'dashboard') {
-    headerTitle.textContent = 'Overview';
+    headerTitle.textContent = 'Dashboard';
     dashboard.style.display = 'block';
     renderMobileDashboard();
   } else if (view === 'more') {
-    headerTitle.textContent = 'More Options';
+    headerTitle.textContent = 'Settings';
     more.style.display = 'block';
     renderMobileMore();
   }
@@ -2836,10 +2907,7 @@ function renderMobileDashboard() {
   const statsObj = calculatePatternStats();
 
   container.innerHTML = `
-    <div style="padding: 16px 20px 6px 20px;">
-      <h1 class="dashboard-large-title" style="font-size: 24px;">Dashboard</h1>
-    </div>
-    <div class="apple-dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 20px;">
+    <div class="apple-dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 20px; margin-top: 8px;">
       <div class="apple-metric-card" style="padding: 14px 16px; border-radius: 18px;">
         <div class="apple-metric-label" style="font-size: 9px; margin-bottom: 4px;">Total Setups</div>
         <div class="apple-metric-value" style="font-size: 26px; margin-bottom: 2px;">${totalTrades}</div>
@@ -2871,32 +2939,95 @@ function renderMobileMore() {
   if (!container) return;
 
   container.innerHTML = `
-    <div class="settings-card" style="padding:12px; gap:8px;">
-      <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">App Settings</span>
-      
-      <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-        <span>Theme Control</span>
-        <button class="btn-secondary" style="font-size:10px; padding:4px 8px;" onclick="toggleTheme()">Swap Theme</button>
+    <div class="apple-settings-group-title" style="margin-top: 8px;">App Settings</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #5856d6;">
+            <i class="fa-solid fa-circle-half-stroke"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Theme Control</span>
+            <span class="apple-settings-desc">Swap between light and dark modes</span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="toggleTheme()">Swap Theme</button>
+        </div>
       </div>
 
-      <div style="font-size:11px; word-break:break-all; margin-top:8px;">
-        <strong>Sync Folder:</strong> <code>${storagePath || 'Not Configured'}</code>
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #007aff;">
+            <i class="fa-solid fa-folder"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Sync Folder Path</span>
+            <span class="apple-settings-desc" style="word-break: break-all; max-width: 170px;">${storagePath || 'Not Configured'}</span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="chooseStorageFolder()">Change</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 2px;"></i>
+        </div>
       </div>
-      
-      <button class="btn-secondary" style="font-size:10px; padding:4px 8px; margin-top:4px;" onclick="chooseStorageFolder()">Change Folder</button>
     </div>
 
-    <div class="settings-card" style="padding:12px; gap:8px; margin-top:12px;">
-      <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Backup & Restore</span>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <button class="btn-primary" style="width:100%; font-size:11px; padding:6px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="exportBackupZip()"><i class="fa-solid fa-file-zipper"></i> Export Data (.zip)</button>
-        <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="triggerImportZip()"><i class="fa-solid fa-file-import"></i> Import Data (.zip)</button>
+    <div class="apple-settings-group-title">Backup & Restore</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #ff9500;">
+            <i class="fa-solid fa-file-zipper"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Export Backup (.zip)</span>
+            <span class="apple-settings-desc">Package setups and images</span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-primary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="exportBackupZip()">Export</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 2px;"></i>
+        </div>
+      </div>
+      
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #ff3b30;">
+            <i class="fa-solid fa-file-import"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Import Backup (.zip)</span>
+            <span class="apple-settings-desc">Restore database from backup zip</span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="triggerImportZip()">Import</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 2px;"></i>
+        </div>
       </div>
     </div>
 
-    <div class="settings-card" style="padding:12px; gap:8px; margin-top:12px;">
-      <span class="settings-card-title" style="font-size:13px; padding-bottom:6px;">Data</span>
-      <button class="btn-secondary" style="width:100%; font-size:11px; padding:6px;" onclick="clearDatabase()">Reset All Data</button>
+    <div class="apple-settings-group-title">Data Management</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #8e8e93;">
+            <i class="fa-solid fa-trash-can"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Reset Database</span>
+            <span class="apple-settings-desc">Wipe all entries and configurations</span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px; color: var(--color-bear);" onclick="clearDatabase()">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 24px; padding-bottom: 12px;">
+      <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Version 1.0.1</span>
     </div>
   `;
 }

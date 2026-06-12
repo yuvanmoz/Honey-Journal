@@ -23,7 +23,7 @@
   <!-- Minimal Animated Boot Splash Loader -->
   <div id="boot-splash" style="position:fixed;inset:0;background-color:#0d0f14;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity 0.4s ease,visibility 0.4s ease;">
     <div style="text-align:center;">
-      <i class="fa-solid fa-cube" style="font-size:48px;color:#c9a227;animation:splashPulse 1.2s ease-in-out infinite alternate;"></i>
+      <img src="Images/app_icon.png" style="width:72px; height:72px; border-radius:16px; object-fit:cover; animation:splashPulse 1.2s ease-in-out infinite alternate; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
       <div style="color:#c9a227;font-size:18px;font-weight:800;margin-top:12px;letter-spacing:-0.02em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Honey Journal</div>
     </div>
   </div>
@@ -41,7 +41,7 @@
         <div class="sidebar-top">
           <div class="sidebar-logo" onclick="switchDesktopView('patterns')" title="Honey Journal">
             <span class="sidebar-logo-text">
-              <i class="fa-solid fa-cube"></i> <span class="logo-name">Honey Journal</span>
+              <img src="Images/app_icon.png" class="sidebar-logo-img" style="width:20px; height:20px; border-radius:5px; margin-right:8px; object-fit:cover;"> <span class="logo-name">Honey Journal</span>
             </span>
           </div>
           
@@ -271,6 +271,12 @@
             </div>
           </header>
 
+          <!-- Pull to Refresh Indicator -->
+          <div id="pull-to-refresh" style="height: 0px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); transition: height 0.15s ease; color: var(--accent-gold); font-size: 11px; font-weight: 600; gap: 8px; border-bottom: 1px solid var(--border-color); width: 100%;">
+            <i class="fa-solid fa-arrows-rotate spinner-ref" style="font-size: 12px;"></i>
+            <span id="pull-to-refresh-text">Pull to refresh...</span>
+          </div>
+
           <!-- Mobile Filters Panel (Dropdowns) -->
           <div class="phone-tabs-bar" id="mobile-filter-bar">
             <!-- Mobile Search Bar overlay -->
@@ -354,8 +360,8 @@
               <span>Stats</span>
             </div>
             <div class="phone-nav-item" id="nav-m-more" onclick="switchMobileView('more')">
-              <i class="fa-solid fa-ellipsis"></i>
-              <span>More</span>
+              <i class="fa-solid fa-gear"></i>
+              <span>Settings</span>
             </div>
           </nav>
 
