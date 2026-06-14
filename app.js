@@ -1066,10 +1066,11 @@ function renderDesktopGallery(list) {
     return;
   }
 
-  list.forEach(entry => {
+  list.forEach((entry, index) => {
     const card = document.createElement('div');
     card.className = `journal-card ${activeEntryId === entry.id ? 'active-border' : ''}`;
     card.onclick = () => openEntryDetail(entry.id);
+    card.style.animationDelay = `${index * 40}ms`;
 
     let biasColor = 'var(--color-neutral)';
     if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
@@ -2670,10 +2671,11 @@ function renderMobileGallery(list) {
     return;
   }
 
-  list.forEach(entry => {
+  list.forEach((entry, index) => {
     const card = document.createElement('div');
     card.className = 'phone-card';
     card.onclick = () => openEntryDetail(entry.id);
+    card.style.animationDelay = `${index * 40}ms`;
 
     let biasColor = 'var(--color-neutral)';
     if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
