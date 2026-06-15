@@ -11,7 +11,7 @@
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* macOS Dark Mode Aesthetic - Deeper Indigo Charcoal */
-  --bg-app: #12121a;
+  --bg-app: #161622;
   --bg-primary: #1c1c26;
   --bg-secondary: #16161e;
   --bg-tertiary: #22222e;
@@ -78,7 +78,7 @@
 
 /* ── macOS Light Theme HIG ─────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg-app: #eef0f7; /* Warm silver-blue */
+  --bg-app: #f5f6fa; /* Warm silver-blue */
   --bg-primary: #f5f6fa;
   --bg-secondary: #eaecf3;
   --bg-tertiary: #dfe2ec;
@@ -116,14 +116,22 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE 10+ */
+}
+
+html, body {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none !important;
 }
 
 body {
-  background-color: var(--bg-app);
+  background-color: var(--bg-app) !important;
   color: var(--text-main);
   font-family: var(--font-body);
-  overflow-x: hidden;
-  height: 100vh;
   display: flex;
   flex-direction: column;
   transition: background-color var(--transition-normal), color var(--transition-normal);
@@ -137,35 +145,18 @@ button, input, select, textarea {
   color: inherit;
 }
 
-/* ── Scrollbar — Refined ───────────────────────────────────────────────── */
+/* ── Scrollbar — Hidden ────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsla(220, 15%, 35%, 0.35);
-  border-radius: var(--radius-full);
-  transition: background var(--transition-fast);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsla(220, 15%, 45%, 0.55);
-}
-
-::-webkit-scrollbar-corner {
-  background: transparent;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* ── Core Shell ────────────────────────────────────────────────────────── */
 .prototype-header {
   height: 56px;
   background-color: var(--glass-bg);
-  box-shadow: 0 1px 0 var(--glass-border), var(--glass-shadow);
+  box-shadow: var(--glass-shadow);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -236,7 +227,8 @@ button, input, select, textarea {
   display: flex;
   overflow: hidden;
   position: relative;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-app) !important;
+  overscroll-behavior: none !important;
 }
 
 .mobile-section {
@@ -245,9 +237,10 @@ button, input, select, textarea {
   height: 100%;
   justify-content: center;
   align-items: center;
-  background-color: var(--bg-app);
+  background-color: var(--bg-app) !important;
   overflow: hidden;
   position: relative;
+  overscroll-behavior: none !important;
 }
 
 @media (max-width: 800px) {
@@ -299,23 +292,30 @@ button, input, select, textarea {
 
   /* Unified Mobile Backgrounds */
   .phone-screen {
-    background-color: #0e0e16 !important;
+    background-color: var(--bg-app) !important;
+    overscroll-behavior-y: contain !important;
+    overscroll-behavior-x: none !important;
   }
   [data-theme="light"] .phone-screen {
-    background-color: #eaecf5 !important;
+    background-color: var(--bg-app) !important;
   }
   
   .phone-header, .phone-tabs-bar, .phone-detail-header {
-    background: rgba(14, 14, 22, 0.68) !important;
-    backdrop-filter: blur(24px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    background: var(--bg-app) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
     border-bottom: none !important;
   }
   
   [data-theme="light"] .phone-header,
   [data-theme="light"] .phone-tabs-bar,
   [data-theme="light"] .phone-detail-header {
-    background: rgba(234, 236, 245, 0.78) !important;
+    background: var(--bg-app) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    border-bottom: none !important;
   }
 
   .phone-detail-view {
@@ -326,6 +326,8 @@ button, input, select, textarea {
   
   .phone-detail-body {
     background-color: transparent !important;
+    overscroll-behavior-y: contain !important;
+    overscroll-behavior-x: none !important;
   }
 }
 
@@ -339,7 +341,7 @@ button, input, select, textarea {
   background-color: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-right: 1px solid var(--glass-border);
+  border-right: none !important;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -548,7 +550,7 @@ button, input, select, textarea {
   flex-direction: column;
   gap: 18px;
   background-color: var(--glass-bg);
-  box-shadow: 0 1px 0 var(--glass-border);
+  box-shadow: none !important;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
 }
@@ -954,7 +956,7 @@ button, input, select, textarea {
   background-color: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-left: 1px solid var(--glass-border);
+  border-left: none !important;
   height: 100%;
   display: flex !important;
   flex-direction: column;
@@ -980,7 +982,7 @@ button, input, select, textarea {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  box-shadow: 0 1px 0 var(--glass-border);
+  box-shadow: none !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   background: rgba(255, 255, 255, 0.03);
@@ -1081,7 +1083,7 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: none !important;
   padding-bottom: 16px;
 }
 
@@ -1092,7 +1094,7 @@ button, input, select, textarea {
   gap: 12px;
   padding: 8px 16px;
   background: rgba(255, 255, 255, 0.01);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: none !important;
   transition: background var(--transition-fast);
 }
 
@@ -1111,7 +1113,7 @@ button, input, select, textarea {
 }
 
 .attribute-label i {
-  color: var(--accent-gold);
+  color: var(--apple-accent-blue) !important;
   width: 16px;
   font-size: 13px;
 }
@@ -1676,7 +1678,7 @@ button, input, select, textarea {
 .phone-fab {
   position: absolute;
   right: 16px;
-  bottom: 72px;
+  bottom: 96px;
   width: 48px;
   height: 48px;
   background-color: var(--accent-olive);
@@ -1789,23 +1791,11 @@ button, input, select, textarea {
 }
 
 .phone-nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 48px;
-  height: 42px;
-  border-radius: 14px;
-  background: rgba(0, 122, 255, 0.10);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: var(--ease-snappy);
-  z-index: 1;
+  display: none !important;
 }
 
 [data-theme="dark"] .phone-nav-item.active::before {
-  background: rgba(59, 130, 246, 0.15);
+  display: none !important;
 }
 
 .phone-nav-item.active::after {
@@ -3709,53 +3699,95 @@ button, input, select, textarea {
 
 /* ── Sub-Gallery Playbook Card ─────────────────────────────────────────── */
 .subgallery-playbook-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  background: transparent;
+  border: none;
+  border-radius: 0;
   margin-bottom: 20px;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: border-color var(--transition-fast);
-}
-
-.subgallery-playbook-card:hover {
-  border-color: var(--border-focus);
+  overflow: visible;
+  box-shadow: none;
 }
 
 .playbook-header {
-  padding: 12px 16px;
+  padding: 8px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: pointer;
+  cursor: default;
   font-weight: 600;
   font-size: 13px;
   color: var(--text-main);
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
   user-select: none;
-  transition: background var(--transition-fast);
 }
 
 .playbook-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
 }
 
 .playbook-content {
-  padding: 16px;
-  border-top: 1px solid var(--border-color);
+  padding: 8px 0 0 0;
+  border-top: none;
   display: flex;
   flex-direction: column;
 }
 
 .playbook-content.collapsed {
-  display: none;
+  display: flex;
 }
 
-.playbook-text {
+.playbook-inline-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.5;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.playbook-inline-textarea:focus {
+  border-color: var(--apple-accent-blue);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="light"] .playbook-inline-textarea {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .playbook-inline-textarea:focus {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.playbook-save-btn {
+  background: var(--apple-accent-blue);
+  color: #fff;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 100px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.playbook-save-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+
+.playbook-save-btn:active {
+  transform: scale(0.98);
 }
 
 /* ── Apple Grouped Settings List Layout ──────────────────────────────────── */
@@ -4051,3 +4083,87 @@ button, input, select, textarea {
     display: none !important;
   }
 }
+
+/* ── Custom Apple Select Dropdowns ─────────────────────────────────────── */
+.apple-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.apple-dropdown-trigger {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  transition: all var(--ease-snappy);
+}
+
+[data-theme="light"] .apple-dropdown-trigger {
+  background-color: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.apple-dropdown-trigger:hover {
+  border-color: var(--accent-olive);
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="light"] .apple-dropdown-trigger:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.apple-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 140px;
+  background-color: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-shadow), var(--shadow-md);
+  z-index: 100;
+  padding: 4px;
+  display: none;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  animation: dropdownSlide 0.2s var(--ease-snappy);
+}
+
+.apple-dropdown-menu.open {
+  display: block;
+}
+
+.apple-dropdown-item {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background-color var(--transition-fast);
+}
+
+.apple-dropdown-item:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="light"] .apple-dropdown-item:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.apple-dropdown-item.active {
+  background-color: var(--accent-olive-light) !important;
+  color: var(--accent-olive) !important;
+}
+

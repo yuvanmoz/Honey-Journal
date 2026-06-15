@@ -808,6 +808,7 @@ function renderAll() {
     renderPatternSubGallery('desktop');
     renderPatternSubGallery('mobile');
   }
+  setupAppleDropdowns();
 }
 
 // Sync filter selections between desktop and mobile variables
@@ -859,7 +860,112 @@ function populatePatternFilterDropdowns() {
   // Preserve selections
   dPattern.value = currentDValue || 'all';
   mPattern.value = currentMValue || 'all';
+
+  setupAppleDropdowns();
 }
+
+// Dynamic Custom Apple Select Dropdowns
+function setupAppleDropdowns() {
+  const selects = document.querySelectorAll('select.input-select, select.mobile-filter-select');
+  selects.forEach(select => {
+    // Check if container already exists
+    let container = select.nextElementSibling;
+    if (container && container.classList.contains('apple-dropdown-container')) {
+      updateAppleDropdown(select);
+      return;
+    }
+    
+    // Hide native select
+    select.style.display = 'none';
+    
+    // Create custom container
+    container = document.createElement('div');
+    container.className = 'apple-dropdown-container';
+    
+    // Maintain flex layout sizing on mobile
+    if (select.classList.contains('mobile-filter-select')) {
+      container.style.flex = '1';
+    }
+    
+    const trigger = document.createElement('div');
+    trigger.className = 'apple-dropdown-trigger';
+    trigger.style.justifyContent = 'space-between';
+    trigger.style.width = select.style.width || '100%';
+    
+    const triggerText = document.createElement('span');
+    triggerText.className = 'trigger-text';
+    triggerText.textContent = select.options[select.selectedIndex]?.text || '';
+    
+    const triggerIcon = document.createElement('i');
+    triggerIcon.className = 'fa-solid fa-chevron-down';
+    triggerIcon.style.fontSize = '9px';
+    triggerIcon.style.opacity = '0.6';
+    
+    trigger.appendChild(triggerText);
+    trigger.appendChild(triggerIcon);
+    
+    const menu = document.createElement('div');
+    menu.className = 'apple-dropdown-menu';
+    menu.style.width = select.style.width || '100%';
+    
+    buildDropdownOptions(select, menu, triggerText);
+    
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.apple-dropdown-menu.open').forEach(openMenu => {
+        if (openMenu !== menu) openMenu.classList.remove('open');
+      });
+      menu.classList.toggle('open');
+    });
+    
+    container.appendChild(trigger);
+    container.appendChild(menu);
+    select.parentNode.insertBefore(container, select.nextSibling);
+  });
+}
+
+function buildDropdownOptions(select, menu, triggerText) {
+  menu.innerHTML = '';
+  Array.from(select.options).forEach(opt => {
+    const item = document.createElement('div');
+    item.className = 'apple-dropdown-item';
+    if (opt.selected) item.classList.add('active');
+    item.textContent = opt.text;
+    
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      select.value = opt.value;
+      triggerText.textContent = opt.text;
+      
+      menu.querySelectorAll('.apple-dropdown-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      
+      menu.classList.remove('open');
+      
+      select.dispatchEvent(new Event('change'));
+    });
+    
+    menu.appendChild(item);
+  });
+}
+
+function updateAppleDropdown(select) {
+  const container = select.nextElementSibling;
+  if (!container) return;
+  const triggerText = container.querySelector('.trigger-text');
+  const menu = container.querySelector('.apple-dropdown-menu');
+  if (triggerText && menu) {
+    triggerText.textContent = select.options[select.selectedIndex]?.text || '';
+    buildDropdownOptions(select, menu, triggerText);
+  }
+}
+
+// Global click listener to dismiss custom select menus on outside clicks
+document.addEventListener('click', () => {
+  document.querySelectorAll('.apple-dropdown-menu.open').forEach(menu => {
+    menu.classList.remove('open');
+  });
+});
 
 // ==========================================================================
 // DESKTOP CONTROLS & RENDERING
@@ -2118,15 +2224,16 @@ function saveCurrentField(field, val) {
   const immediate = (field !== 'notes' && field !== 'mistakes');
   saveDatabase(entry, false, immediate);
   
-  // Re-render grids
-  const processedList = getProcessedEntries(desktopSearchText, activeCalendarDate);
-  if (desktopLayout === 'gallery') {
-    renderDesktopGallery(processedList);
-  } else {
-    renderDesktopTable(processedList);
+  // Only re-render list if the field affects the list visualization
+  if (field !== 'notes' && field !== 'mistakes') {
+    const processedList = getProcessedEntries(desktopSearchText, activeCalendarDate);
+    if (desktopLayout === 'gallery') {
+      renderDesktopGallery(processedList);
+    } else {
+      renderDesktopTable(processedList);
+    }
+    renderMobileContent();
   }
-
-  renderMobileContent();
 }
 
 // Save Custom Attributes
@@ -3196,20 +3303,12 @@ function renderPatternSubGallery(platform) {
 
   const playbookCardHtml = `
     <div class="subgallery-playbook-card">
-      <div class="playbook-header" onclick="togglePlaybookCollapse('${platform}')">
-        <span><i class="fa-solid fa-book-open" style="margin-right:6px; color:var(--accent-gold);"></i> Setup Description & Guide</span>
-        <span id="${platform}-playbook-toggle-icon"><i class="fa-solid fa-chevron-down"></i></span>
+      <div class="playbook-header">
+        <span><i class="fa-solid fa-align-left" style="margin-right:6px; color:var(--apple-accent-blue);"></i> Description</span>
+        <button id="${platform}-playbook-save-btn" class="playbook-save-btn" style="display:none;" onclick="savePlaybookDescription('${platform}')"><i class="fa-solid fa-check"></i> Save</button>
       </div>
-      <div id="${platform}-playbook-content" class="playbook-content collapsed">
-        <div id="${platform}-playbook-text-display" class="playbook-text">${description || '<span style="color:var(--text-muted); font-style:italic;">No description added yet. Click Edit below to write guidelines for this setup.</span>'}</div>
-        <div id="${platform}-playbook-edit-container" style="display:none; flex-direction:column; gap:8px; margin-top:8px;">
-          <textarea id="${platform}-playbook-textarea" class="textarea-control" style="min-height:100px; font-size:12px;" placeholder="Describe how to trade this pattern...">${description}</textarea>
-        </div>
-        <div style="margin-top:12px; display:flex; gap:8px;">
-          <button id="${platform}-playbook-edit-btn" class="btn-secondary" style="font-size:11px; padding:4px 10px; border-radius:100px;" onclick="enablePlaybookEdit('${platform}')"><i class="fa-solid fa-pen"></i> Edit Description</button>
-          <button id="${platform}-playbook-save-btn" class="btn-primary" style="font-size:11px; padding:4px 10px; border-radius:100px; display:none;" onclick="savePlaybookDescription('${platform}')"><i class="fa-solid fa-check"></i> Save</button>
-          <button id="${platform}-playbook-cancel-btn" class="btn-secondary" style="font-size:11px; padding:4px 10px; border-radius:100px; display:none;" onclick="cancelPlaybookEdit('${platform}')"><i class="fa-solid fa-xmark"></i> Cancel</button>
-        </div>
+      <div class="playbook-content">
+        <textarea id="${platform}-playbook-textarea" class="playbook-inline-textarea" placeholder="Describe this setup..." oninput="handlePlaybookInput('${platform}')" onkeydown="if((event.ctrlKey || event.metaKey) && event.key === 'Enter') { savePlaybookDescription('${platform}'); event.preventDefault(); }">${description}</textarea>
       </div>
     </div>
   `;
@@ -3895,36 +3994,32 @@ function readAndAddPastedImage(file) {
 }
 
 // Playbook / Setup Guidelines Toggles & Saves
-function togglePlaybookCollapse(platform) {
-  const content = document.getElementById(`${platform}-playbook-content`);
-  const icon = document.getElementById(`${platform}-playbook-toggle-icon`);
-  if (content && icon) {
-    if (content.classList.contains('collapsed')) {
-      content.classList.remove('collapsed');
-      icon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
-    } else {
-      content.classList.add('collapsed');
-      icon.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
-    }
-  }
-}
+function togglePlaybookCollapse(platform) {}
+function enablePlaybookEdit(platform) {}
+function cancelPlaybookEdit(platform) {}
 
-function enablePlaybookEdit(platform) {
-  document.getElementById(`${platform}-playbook-text-display`).style.display = 'none';
-  document.getElementById(`${platform}-playbook-edit-container`).style.display = 'flex';
-  document.getElementById(`${platform}-playbook-edit-btn`).style.display = 'none';
-  document.getElementById(`${platform}-playbook-save-btn`).style.display = 'inline-flex';
-  document.getElementById(`${platform}-playbook-cancel-btn`).style.display = 'inline-flex';
+function handlePlaybookInput(platform) {
   const textarea = document.getElementById(`${platform}-playbook-textarea`);
-  if (textarea) textarea.focus();
-}
-
-function cancelPlaybookEdit(platform) {
-  document.getElementById(`${platform}-playbook-text-display`).style.display = 'block';
-  document.getElementById(`${platform}-playbook-edit-container`).style.display = 'none';
-  document.getElementById(`${platform}-playbook-edit-btn`).style.display = 'inline-flex';
-  document.getElementById(`${platform}-playbook-save-btn`).style.display = 'none';
-  document.getElementById(`${platform}-playbook-cancel-btn`).style.display = 'none';
+  if (!textarea) return;
+  
+  // Show save button
+  const saveBtn = document.getElementById(`${platform}-playbook-save-btn`);
+  if (saveBtn) {
+    saveBtn.style.display = 'inline-flex';
+  }
+  
+  // Keep the other platform's textarea value in sync
+  const otherPlatform = platform === 'desktop' ? 'mobile' : 'desktop';
+  const otherTextarea = document.getElementById(`${otherPlatform}-playbook-textarea`);
+  if (otherTextarea) {
+    otherTextarea.value = textarea.value;
+  }
+  
+  // Also show the other platform's save button
+  const otherSaveBtn = document.getElementById(`${otherPlatform}-playbook-save-btn`);
+  if (otherSaveBtn) {
+    otherSaveBtn.style.display = 'inline-flex';
+  }
 }
 
 function savePlaybookDescription(platform) {
@@ -3939,18 +4034,12 @@ function savePlaybookDescription(platform) {
     // Save to localStorage/Tauri
     saveDatabase(null, false, true);
     
-    // Refresh display
-    renderPatternSubGallery('desktop');
-    renderPatternSubGallery('mobile');
-    
-    // Keep container expanded after load on both views
+    // Hide save buttons on both platforms
     ['desktop', 'mobile'].forEach(plat => {
-      const content = document.getElementById(`${plat}-playbook-content`);
-      if (content) content.classList.remove('collapsed');
-      const icon = document.getElementById(`${plat}-playbook-toggle-icon`);
-      if (icon) icon.innerHTML = '<i class="fa-solid fa-chevron-up"></i>';
+      const btn = document.getElementById(`${plat}-playbook-save-btn`);
+      if (btn) btn.style.display = 'none';
     });
     
-    showToast('Setup description updated successfully!', 'success');
+    showToast('Description saved successfully!', 'success');
   }
 }
