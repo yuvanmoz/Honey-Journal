@@ -4125,6 +4125,8 @@ button, input, select, textarea {
   top: calc(100% + 6px);
   left: 0;
   min-width: 140px;
+  max-height: 250px;
+  overflow-y: auto;
   background-color: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);

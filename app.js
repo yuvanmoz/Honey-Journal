@@ -481,7 +481,8 @@ async function checkStorageFolderSetup() {
     storagePath = savedPath;
     if (setupOverlay) setupOverlay.style.display = 'none';
     await loadDatabase();
-    renderAll();
+    switchDesktopView(currentDesktopView);
+    switchMobileView(currentMobileView);
     return;
   }
 
@@ -581,7 +582,8 @@ async function setStoragePath(path) {
   if (setupOverlay) setupOverlay.style.display = 'none';
 
   await loadDatabase();
-  renderAll();
+  switchDesktopView(currentDesktopView);
+  switchMobileView(currentMobileView);
 }
 
 // ---------------------------------------------------------------------------
