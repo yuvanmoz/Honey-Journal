@@ -553,6 +553,8 @@ button, input, select, textarea {
   box-shadow: none !important;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  position: relative;
+  z-index: 10;
 }
 
 .header-top {
@@ -1584,6 +1586,8 @@ button, input, select, textarea {
   flex-direction: column;
   gap: 12px;
   background-color: var(--bg-primary);
+  position: relative;
+  z-index: 10;
 }
 
 /* ── Mobile Card Grid ──────────────────────────────────────────────────── */
