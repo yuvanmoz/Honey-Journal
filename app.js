@@ -1088,11 +1088,14 @@ function switchDesktopView(view) {
   titleEl.textContent = view.charAt(0).toUpperCase() + view.slice(1);
 
   if (view === 'patterns') {
+    populatePatternFilterDropdowns();
+    syncFilterSelectors();
     if (desktopLayout === 'gallery') {
       galleryView.style.display = 'grid';
     } else {
       tableView.style.display = 'block';
     }
+    renderDesktopContent();
   } else if (view === 'calendar') {
     calendarView.style.display = 'block';
     renderDesktopCalendar();
@@ -3940,6 +3943,8 @@ function switchMobileView(view) {
   headerTitle.textContent = view.charAt(0).toUpperCase() + view.slice(1);
 
   if (view === 'patterns') {
+    populatePatternFilterDropdowns();
+    syncFilterSelectors();
     gallery.style.display = 'grid'; // Force mobile Grid layout
     renderMobileContent();
   } else if (view === 'calendar') {
