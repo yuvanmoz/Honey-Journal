@@ -42,9 +42,15 @@ let currentCalendarMonth = new Date().getMonth();
 
 
 // View state
-let currentDesktopView = 'patterns'; // dashboard, patterns, calendar, stats, settings
-let currentMobileView = 'patterns';  // dashboard, patterns, calendar, stats, more
-let lastMobileView = 'patterns';
+let currentDesktopView = 'dashboard'; // dashboard, patterns, calendar, settings
+let currentMobileView = 'dashboard';  // dashboard, patterns, calendar, more
+let lastMobileView = 'dashboard';
+let currentStatsTab = 'setup';
+let currentEquityPeriod = 'all';
+let statsCalendarYear = new Date().getFullYear();
+let statsCalendarMonth = new Date().getMonth();
+let currentStatsPeriod = 'monthly';
+let statsSelectedDate = null;
 let editingTagName = null;
 
 let desktopLayout = 'gallery'; // gallery, table
@@ -650,8 +656,65 @@ async function loadDatabase() {
   if (!localTags)         localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
   if (!localCustomAttrs)  localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
 
-  // Migrate entries: old single-image string → images array
-  entries.forEach(e => { if (!e.images) e.images = e.image ? [e.image] : []; });
+  // Migrate entries: old single-image string → images array, and status based on P&L
+  entries.forEach(e => {
+    if (!e.images) e.images = e.image ? [e.image] : [];
+    updateEntryStatus(e);
+  });
+}
+
+function updateEntryStatus(entry) {
+  if (!entry) return;
+  if (!entry.customAttributes) {
+    entry.customAttributes = {};
+  }
+  const plRaw = entry.customAttributes['P&L'];
+  if (plRaw === undefined || plRaw === null || plRaw === '' || Number(plRaw) === 0) {
+    entry.status = 'MISSED';
+  } else if (Number(plRaw) > 0) {
+    entry.status = 'PASSED';
+  } else {
+    entry.status = 'FAILED';
+  }
+}
+
+function isEntryEmpty(entry) {
+  if (!entry) return true;
+  if (entry.patterns && entry.patterns.length > 0) return false;
+  if (entry.images && entry.images.length > 0) return false;
+  if (entry.notes && entry.notes.trim() !== '') return false;
+  if (entry.mistakes && entry.mistakes.trim() !== '') return false;
+  
+  if (entry.customAttributes) {
+    const keysToCheck = ['Market', 'P&L', 'Entry Price', 'Exit Price', 'Quantity', 'Charges'];
+    for (const key of keysToCheck) {
+      const val = entry.customAttributes[key];
+      if (val !== undefined && val !== null && val !== '') {
+        return false;
+      }
+    }
+    for (const key in entry.customAttributes) {
+      if (!keysToCheck.includes(key)) {
+        const val = entry.customAttributes[key];
+        if (val !== undefined && val !== null && val !== '') {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+function discardEmptyEntryIfNecessary() {
+  if (!activeEntryId) return;
+  const entryIndex = entries.findIndex(e => e.id === activeEntryId);
+  if (entryIndex !== -1) {
+    const entry = entries[entryIndex];
+    if (isEntryEmpty(entry)) {
+      entries.splice(entryIndex, 1);
+      saveDatabase(null, true, true); // Immediate save of clean DB
+    }
+  }
 }
 
 let saveTimeout = null;
@@ -809,6 +872,11 @@ function renderAll() {
     renderPatternSubGallery('mobile');
   }
   setupAppleDropdowns();
+}
+
+function renderDetailOnly() {
+  renderDesktopDetail();
+  renderMobileDetail();
 }
 
 // Sync filter selections between desktop and mobile variables
@@ -1020,17 +1088,13 @@ function switchDesktopView(view) {
   } else if (view === 'calendar') {
     calendarView.style.display = 'block';
     renderDesktopCalendar();
-  } else if (view === 'stats') {
-    titleEl.textContent = 'Performance Statistics';
-    statsView.style.display = 'block';
-    renderDesktopStats();
   } else if (view === 'settings') {
     settingsView.style.display = 'block';
     renderDesktopSettings();
   } else if (view === 'dashboard') {
-    titleEl.textContent = 'Honey Journal Dashboard';
+    titleEl.textContent = 'Dashboard';
     statsView.style.display = 'block';
-    renderDesktopStats(true); // Overview mode
+    renderDesktopStats();
   }
 
   renderDesktopSidebar();
@@ -1353,7 +1417,7 @@ function generateCalendarHTML(year, monthIndex) {
     
     let dotsHtml = '';
     dayEntries.forEach(entry => {
-      const statusClass = entry.status === 'PASSED' ? 'passed' : 'failed';
+      const statusClass = entry.status === 'PASSED' ? 'passed' : (entry.status === 'MISSED' ? 'missed' : 'failed');
       const displayTitle = getDisplayName(entry);
       dotsHtml += `<span class="calendar-trade-dot ${statusClass}" title="${displayTitle} (${entry.bias})"></span>`;
     });
@@ -1554,121 +1618,1201 @@ function calculatePatternStats() {
 }
 
 // Stats & Dashboard
-function renderDesktopStats(isDashboard = false) {
+function renderDesktopStats() {
   const container = document.getElementById('desktop-stats-view');
   if (!container) return;
 
-  const totalTrades = entries.length;
-  const passedTrades = entries.filter(e => e.status === 'PASSED').length;
-  const winRate = totalTrades > 0 ? ((passedTrades / totalTrades) * 100).toFixed(1) : 0;
+  const activeSetup = currentStatsTab === 'setup' ? 'active' : '';
+  const activeJournal = currentStatsTab === 'journal' ? 'active' : '';
+    
+    let statsContent = '';
+    
+    if (currentStatsTab === 'setup') {
+      const bullishCounts = {};
+      const bearishCounts = {};
 
-  if (isDashboard) {
-    const statsObj = calculatePatternStats();
+      entries.forEach(entry => {
+        entry.patterns.forEach(pat => {
+          const tagObj = tags.find(t => t.name === pat);
+          const tagType = tagObj ? tagObj.type : 'Both';
+          
+          if (tagType === 'Bullish') {
+            bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+          } else if (tagType === 'Bearish') {
+            bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+          } else {
+            if (entry.bias === 'Bullish') bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+            else if (entry.bias === 'Bearish') bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+            else {
+              bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+              bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+            }
+          }
+        });
+      });
+
+      const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1] - a[1]);
+      const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1] - a[1]);
+
+      let bullHtml = '';
+      sortedBullish.forEach(([name, count], index) => {
+        bullHtml += `
+          <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
+            <div class="stats-rank-label">
+              <span class="stats-rank-number">${index + 1}.</span>
+              <span>${name}</span>
+            </div>
+            <span class="stats-rank-badge">${count} setups</span>
+          </div>
+        `;
+      });
+      if (sortedBullish.length === 0) bullHtml = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">No bullish patterns logged.</div>';
+
+      let bearHtml = '';
+      sortedBearish.forEach(([name, count], index) => {
+        bearHtml += `
+          <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
+            <div class="stats-rank-label">
+              <span class="stats-rank-number">${index + 1}.</span>
+              <span>${name}</span>
+            </div>
+            <span class="stats-rank-badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--color-bear);">${count} setups</span>
+          </div>
+        `;
+      });
+      if (sortedBearish.length === 0) bearHtml = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">No bearish patterns logged.</div>';
+
+      statsContent = `
+        <div style="padding: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
+          <div>
+            <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 12px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-arrow-trend-up" style="color:var(--color-bull);"></i> Bullish Setups Usage</h3>
+            <div class="stats-rank-list">
+              ${bullHtml}
+            </div>
+          </div>
+          
+          <div>
+            <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 12px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-arrow-trend-down" style="color:var(--color-bear);"></i> Bearish Setups Usage</h3>
+            <div class="stats-rank-list">
+              ${bearHtml}
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      statsContent = renderJournalStatsTab(false);
+    }
+
     container.innerHTML = `
-      <div class="dashboard-header-section">
-        <h1 class="dashboard-large-title">Dashboard</h1>
+      <div class="stats-segmented-control">
+        <button class="stats-tab-btn ${activeSetup}" onclick="switchStatsTab('setup')">Setup Statistics</button>
+        <button class="stats-tab-btn ${activeJournal}" onclick="switchStatsTab('journal')">Journal Statistics</button>
       </div>
-      <div class="apple-dashboard-grid">
-        <div class="apple-metric-card">
-          <div class="apple-metric-label">Total Setups</div>
-          <div class="apple-metric-value">${totalTrades}</div>
-          <div class="apple-metric-sub">Logged setups in library</div>
-        </div>
-        <div class="apple-metric-card">
-          <div class="apple-metric-label">Win Rate</div>
-          <div class="apple-metric-value win">${winRate}%</div>
-          <div class="apple-metric-sub">Setups marked as PASSED</div>
-        </div>
+      <div id="stats-tab-content" style="margin-top: 16px;">
+        ${statsContent}
       </div>
+    `;
+}
+
+function calculateJournalStats() {
+  const executedEntries = entries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
+  const missedEntries = entries.filter(e => e.status === 'MISSED');
+
+  const totalEntries = entries.length;
+  const executedCount = executedEntries.length;
+  const missedCount = missedEntries.length;
+
+  const tradingDaysSet = new Set(executedEntries.map(e => e.date));
+  const tradingDays = tradingDaysSet.size;
+
+  let noTradeDays = 0;
+  if (entries.length > 0) {
+    const dates = entries.map(e => new Date(e.date).getTime()).filter(t => !isNaN(t));
+    if (dates.length > 0) {
+      const minDate = new Date(Math.min(...dates));
+      const maxDate = new Date(Math.max(...dates));
+      let cur = new Date(minDate);
+      while (cur <= maxDate) {
+        const yyyy = cur.getFullYear();
+        const mm = String(cur.getMonth() + 1).padStart(2, '0');
+        const dd = String(cur.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        const dayOfWeek = cur.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          if (!tradingDaysSet.has(dateStr)) {
+            noTradeDays++;
+          }
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+  }
+
+  let grossProfit = 0;
+  let grossLoss = 0;
+  let winDaysCount = 0;
+  let lossDaysCount = 0;
+  
+  const byDate = {};
+  executedEntries.forEach(entry => {
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    
+    byDate[entry.date] = (byDate[entry.date] || 0) + plValue;
+  });
+
+  let bestDayVal = -Infinity;
+  let bestDayDate = 'N/A';
+  let worstDayVal = Infinity;
+  let worstDayDate = 'N/A';
+
+  Object.entries(byDate).forEach(([dateStr, dailyPL]) => {
+    if (dailyPL > 0) {
+      grossProfit += dailyPL;
+      winDaysCount++;
+    } else if (dailyPL < 0) {
+      grossLoss += dailyPL;
+      lossDaysCount++;
+    }
+
+    if (dailyPL > bestDayVal) {
+      bestDayVal = dailyPL;
+      bestDayDate = dateStr;
+    }
+    if (dailyPL < worstDayVal) {
+      worstDayVal = dailyPL;
+      worstDayDate = dateStr;
+    }
+  });
+
+  const netPL = grossProfit + grossLoss;
+
+  let tradeGrossProfit = 0;
+  let tradeGrossLoss = 0;
+  let winningTradesCount = 0;
+  let losingTradesCount = 0;
+
+  executedEntries.forEach(entry => {
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    if (plValue > 0) {
+      tradeGrossProfit += plValue;
+      winningTradesCount++;
+    } else if (plValue < 0) {
+      tradeGrossLoss += plValue;
+      losingTradesCount++;
+    }
+  });
+
+  const winRate = executedCount > 0 ? (winningTradesCount / executedCount) * 100 : 0;
+  const profitFactor = grossLoss !== 0 ? Math.abs(grossProfit / grossLoss) : (grossProfit > 0 ? Infinity : 0);
+
+  const avgWinTradePL = winningTradesCount > 0 ? tradeGrossProfit / winningTradesCount : 0;
+  const avgLossTradePL = losingTradesCount > 0 ? tradeGrossLoss / losingTradesCount : 0;
+  
+  const avgWinDay = winDaysCount > 0 ? grossProfit / winDaysCount : 0;
+  const avgLossDay = lossDaysCount > 0 ? grossLoss / lossDaysCount : 0;
+
+  const expectancy = executedCount > 0 ? ((winningTradesCount / executedCount) * avgWinTradePL) + (((executedCount - winningTradesCount) / executedCount) * avgLossTradePL) : 0;
+
+  const bestDayStr = bestDayVal !== -Infinity ? `${bestDayDate} (₹${bestDayVal >= 0 ? '+' : ''}${bestDayVal})` : 'N/A';
+  const worstDayStr = worstDayVal !== Infinity ? `${worstDayDate} (₹${worstDayVal >= 0 ? '+' : ''}${worstDayVal})` : 'N/A';
+
+  const byWeek = {};
+  const weekTradeCount = {};
+  const byMonth = {};
+  const monthTradeCount = {};
+  const byQuarter = {};
+  const quarterTradeCount = {};
+  const byYear = {};
+  const yearTradeCount = {};
+  const byDayOfWeek = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  const dayOfWeekTradeCount = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+
+  executedEntries.forEach(entry => {
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    
+    const d = new Date(entry.date);
+    if (isNaN(d.getTime())) return;
+
+    const yStr = entry.date.slice(0, 4);
+    byYear[yStr] = (byYear[yStr] || 0) + plValue;
+    yearTradeCount[yStr] = (yearTradeCount[yStr] || 0) + 1;
+
+    const mStr = entry.date.slice(0, 7);
+    byMonth[mStr] = (byMonth[mStr] || 0) + plValue;
+    monthTradeCount[mStr] = (monthTradeCount[mStr] || 0) + 1;
+
+    const quarter = Math.ceil((d.getMonth() + 1) / 3);
+    const qStr = `${yStr}-Q${quarter}`;
+    byQuarter[qStr] = (byQuarter[qStr] || 0) + plValue;
+    quarterTradeCount[qStr] = (quarterTradeCount[qStr] || 0) + 1;
+
+    const startOfYear = new Date(d.getFullYear(), 0, 1);
+    const pastDaysOfYear = (d - startOfYear) / 86400000;
+    const wNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+    const wStr = `${yStr}-W${String(wNum).padStart(2, '0')}`;
+    byWeek[wStr] = (byWeek[wStr] || 0) + plValue;
+    weekTradeCount[wStr] = (weekTradeCount[wStr] || 0) + 1;
+
+    const dow = d.getDay();
+    byDayOfWeek[dow] = (byDayOfWeek[dow] || 0) + plValue;
+    dayOfWeekTradeCount[dow] = (dayOfWeekTradeCount[dow] || 0) + 1;
+  });
+
+  const patternLeaderboardMap = {};
+  executedEntries.forEach(entry => {
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    const entryPatterns = entry.patterns || [];
+    
+    entryPatterns.forEach(pat => {
+      if (!patternLeaderboardMap[pat]) {
+        patternLeaderboardMap[pat] = { name: pat, totalPL: 0, count: 0, wins: 0 };
+      }
+      patternLeaderboardMap[pat].totalPL += plValue;
+      patternLeaderboardMap[pat].count += 1;
+      if (plValue > 0) {
+        patternLeaderboardMap[pat].wins += 1;
+      }
+    });
+  });
+
+  const patternLeaderboard = Object.values(patternLeaderboardMap)
+    .map(p => {
+      p.winRate = p.count > 0 ? (p.wins / p.count) * 100 : 0;
+      return p;
+    })
+    .sort((a, b) => b.totalPL - a.totalPL);
+
+  return {
+    totalEntries, executedCount, missedCount,
+    tradingDays, noTradeDays,
+    grossProfit, grossLoss, netPL,
+    winRate, profitFactor, expectancy,
+    winDaysCount, lossDaysCount,
+    avgWinDay, avgLossDay, bestDayStr, worstDayStr,
+    byDate, byWeek, byMonth, byQuarter, byYear, byDayOfWeek,
+    weekTradeCount, monthTradeCount, quarterTradeCount, yearTradeCount, dayOfWeekTradeCount,
+    patternLeaderboard
+  };
+}
+
+function switchStatsTab(tab) {
+  currentStatsTab = tab;
+  renderDesktopStats();
+  renderMobileStats();
+}
+
+function changeStatsCalendarMonth(offset) {
+  statsCalendarMonth += offset;
+  if (statsCalendarMonth < 0) {
+    statsCalendarMonth = 11;
+    statsCalendarYear--;
+  } else if (statsCalendarMonth > 11) {
+    statsCalendarMonth = 0;
+    statsCalendarYear++;
+  }
+  
+  const desktopCal = document.getElementById('desktop-stats-calendar-wrapper');
+  const mobileCal = document.getElementById('mobile-stats-calendar-wrapper');
+  const html = generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth);
+  if (desktopCal) desktopCal.innerHTML = html;
+  if (mobileCal) mobileCal.innerHTML = html;
+
+  const defaultDetail = `
+    <div class="stats-day-detail" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+      Click any date on the calendar to view trade details here.
+    </div>
+  `;
+  const desktopDetail = document.getElementById('desktop-stats-day-detail-wrapper');
+  const mobileDetail = document.getElementById('mobile-stats-day-detail-wrapper');
+  if (desktopDetail) desktopDetail.innerHTML = defaultDetail;
+  if (mobileDetail) mobileDetail.innerHTML = defaultDetail;
+}
+
+function selectStatsCalendarDate(dateStr) {
+  statsSelectedDate = dateStr;
+
+  document.querySelectorAll('.stats-cal-cell').forEach(cell => {
+    cell.classList.remove('selected');
+    if (cell.getAttribute('data-date') === dateStr) {
+      cell.classList.add('selected');
+    }
+  });
+
+  const dayEntries = entries.filter(e => e.date === dateStr);
+  const getDetailHTML = () => {
+    if (dayEntries.length === 0) {
+      return `
+        <div class="stats-day-detail">
+          <div style="font-size:13px; color:var(--text-muted); text-align:center;">No entries for ${dateStr}</div>
+        </div>
+      `;
+    }
+
+    let html = `
+      <div class="stats-day-detail">
+        <div style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+          Entries on ${dateStr}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+    `;
+
+    dayEntries.forEach(entry => {
+      const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+      const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+      const statusClass = entry.status === 'PASSED' ? 'status-passed' : (entry.status === 'MISSED' ? 'status-missed' : 'status-failed');
       
-      <div class="apple-insights-section">
-        <h2 class="apple-section-title">Setup Insights</h2>
-        <div class="apple-insights-grid">
-          <div class="apple-insight-card">
-            <div class="apple-insight-title">Most Profitable Pattern</div>
-            <div class="apple-insight-value bull">${statsObj.bestPattern || 'None'}</div>
+      html += `
+        <div class="stats-day-entry-row" onclick="openEntryDetail('${entry.id}')">
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <div style="font-size:13px; font-weight:600; color:var(--text-main);">${getDisplayName(entry)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${entry.patterns.join(', ') || 'No patterns'}</div>
           </div>
-          <div class="apple-insight-card">
-            <div class="apple-insight-title">Worst Performing Pattern</div>
-            <div class="apple-insight-value bear">${statsObj.worstPattern || 'None'}</div>
+          <div style="text-align:right;">
+            <div style="font-size:13px; font-weight:700;" class="${plValue >= 0 ? 'bull' : 'bear'}">
+              ₹${plValue >= 0 ? '+' : ''}${plValue}
+            </div>
+            <span class="${statusClass}" style="font-size:10px; font-weight:700;">${entry.status}</span>
           </div>
+        </div>
+      `;
+    });
+
+    html += `
         </div>
       </div>
     `;
-  } else {
-    // Generate Pattern rank lists
-    const bullishCounts = {};
-    const bearishCounts = {};
+    return html;
+  };
 
-    entries.forEach(entry => {
-      entry.patterns.forEach(pat => {
-        const tagObj = tags.find(t => t.name === pat);
-        const tagType = tagObj ? tagObj.type : 'Both';
-        
-        if (tagType === 'Bullish') {
-          bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-        } else if (tagType === 'Bearish') {
-          bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
-        } else {
-          if (entry.bias === 'Bullish') bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-          else if (entry.bias === 'Bearish') bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
-          else {
-            bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-            bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
-          }
-        }
+  const desktopDetail = document.getElementById('desktop-stats-day-detail-wrapper');
+  const mobileDetail = document.getElementById('mobile-stats-day-detail-wrapper');
+  const detailHTML = getDetailHTML();
+  
+  if (desktopDetail) desktopDetail.innerHTML = detailHTML;
+  if (mobileDetail) mobileDetail.innerHTML = detailHTML;
+}
+
+function switchStatsPeriod(period) {
+  currentStatsPeriod = period;
+  const stats = calculateJournalStats();
+  
+  const dTable = document.getElementById('desktop-pnl-timeline-table-wrapper');
+  if (dTable) {
+    dTable.innerHTML = generatePLTimelineTableHTML(stats, period);
+  }
+  const mTable = document.getElementById('mobile-pnl-timeline-table-wrapper');
+  if (mTable) {
+    mTable.innerHTML = generatePLTimelineTableHTML(stats, period);
+  }
+
+  // Update active classes for timeline period buttons
+  const timelineSelectors = document.querySelectorAll('.timeline-period-selector .period-btn');
+  timelineSelectors.forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.getAttribute('data-period') === period) {
+      btn.classList.add('active');
+    }
+  });
+}
+
+function generateStatsCalendarHTML(year, month) {
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const firstDay = new Date(year, month, 1).getDay();
+  const numDays = new Date(year, month + 1, 0).getDate();
+
+  let html = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(-1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-left" style="font-size:11px;"></i></button>
+      <div style="font-family:var(--font-display); font-size:14px; font-weight:700; color:var(--text-main);">${monthNames[month]} ${year}</div>
+      <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-right" style="font-size:11px;"></i></button>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; text-align:center; font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
+      <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:6px;">
+  `;
+
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div style="aspect-ratio:1; border-radius:8px; border: 1px solid transparent;"></div>`;
+  }
+
+  for (let day = 1; day <= numDays; day++) {
+    const curMonthStr = String(month + 1).padStart(2, '0');
+    const curDayStr = String(day).padStart(2, '0');
+    const dateStr = `${year}-${curMonthStr}-${curDayStr}`;
+
+    const dayEntries = entries.filter(e => e.date === dateStr);
+    let cellClass = 'stats-cal-cell-empty';
+    let cellStyle = 'aspect-ratio:1; border-radius:8px; border:1px solid rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:12px; font-weight:600; position:relative;';
+
+    if (dayEntries.length > 0) {
+      const executed = dayEntries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
+      const missed = dayEntries.filter(e => e.status === 'MISSED');
+      
+      let dailyPL = 0;
+      executed.forEach(entry => {
+        const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+        dailyPL += typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
       });
+
+      if (executed.length > 0) {
+        if (dailyPL > 0) {
+          cellClass = 'stats-cal-cell-profit';
+        } else if (dailyPL < 0) {
+          cellClass = 'stats-cal-cell-loss';
+        } else {
+          cellClass = 'stats-cal-cell-profit';
+        }
+      } else if (missed.length > 0) {
+        cellClass = 'stats-cal-cell-missed';
+      }
+    }
+
+    const isSelected = statsSelectedDate === dateStr ? 'selected' : '';
+
+    html += `
+      <div class="stats-cal-cell ${cellClass} ${isSelected}" data-date="${dateStr}" onclick="selectStatsCalendarDate('${dateStr}')" style="${cellStyle}">
+        ${day}
+      </div>
+    `;
+  }
+
+  html += `
+    </div>
+  `;
+
+  return html;
+}
+
+function generatePLTimelineTableHTML(stats, period) {
+  let dataObj = {};
+  let tradeCounts = {};
+  if (period === 'daily') {
+    dataObj = stats.byDate;
+    tradeCounts = {};
+    entries.forEach(e => {
+      if (e.status === 'PASSED' || e.status === 'FAILED') {
+        tradeCounts[e.date] = (tradeCounts[e.date] || 0) + 1;
+      }
     });
+  } else if (period === 'weekly') {
+    dataObj = stats.byWeek;
+    tradeCounts = stats.weekTradeCount;
+  } else if (period === 'monthly') {
+    dataObj = stats.byMonth;
+    tradeCounts = stats.monthTradeCount;
+  } else if (period === 'quarterly') {
+    dataObj = stats.byQuarter;
+    tradeCounts = stats.quarterTradeCount;
+  } else if (period === 'yearly') {
+    dataObj = stats.byYear;
+    tradeCounts = stats.yearTradeCount;
+  }
 
-    const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1] - a[1]);
-    const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1] - a[1]);
+  const sortedKeys = Object.keys(dataObj).sort().reverse();
 
-    let bullHtml = '';
-    sortedBullish.forEach(([name, count], index) => {
-      bullHtml += `
-        <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
-          <div class="stats-rank-label">
-            <span class="stats-rank-number">${index + 1}.</span>
-            <span>${name}</span>
+  let html = `
+    <table class="pnl-timeline-table">
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th>Trades</th>
+          <th style="text-align:right;">P&L</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  if (sortedKeys.length === 0) {
+    html += `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">No trading activity logged.</td></tr>`;
+  } else {
+    sortedKeys.forEach(key => {
+      const pl = dataObj[key];
+      const count = tradeCounts[key] || 0;
+      const rowClass = pl >= 0 ? 'pnl-row-profit' : 'pnl-row-loss';
+      html += `
+        <tr class="${rowClass}">
+          <td style="font-weight:600;">${key}</td>
+          <td>${count} trades</td>
+          <td style="text-align:right; font-weight:700;">₹${pl >= 0 ? '+' : ''}${pl.toLocaleString()}</td>
+        </tr>
+      `;
+    });
+  }
+
+  html += `
+      </tbody>
+    </table>
+  `;
+
+  return html;
+}
+
+function renderMissedSetupsSection() {
+  const missedEntries = entries.filter(e => e.status === 'MISSED');
+  
+  if (missedEntries.length === 0) {
+    return `
+      <div style="padding:20px; background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; text-align:center; color:var(--text-muted); font-size:13px;">
+        No missed setups logged — great discipline! ✅
+      </div>
+    `;
+  }
+
+  let html = `<div class="missed-setups-grid">`;
+  missedEntries.forEach(entry => {
+    const firstImg = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+    const imgHtml = firstImg 
+      ? `<img src="${firstImg}" class="missed-setup-thumb" />` 
+      : `<div class="missed-setup-thumb" style="display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:24px; background:var(--bg-secondary);"><i class="fa-solid fa-chart-line"></i></div>`;
+    
+    html += `
+      <div class="missed-setup-card" onclick="openEntryDetail('${entry.id}')">
+        ${imgHtml}
+        <div class="missed-setup-info">
+          <div class="missed-date">${entry.date}</div>
+          <div class="missed-tags" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${entry.patterns.join(', ') || 'No Setup Name'}</div>
+        </div>
+      </div>
+    `;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function getEquityCurveData(period) {
+  let filtered = entries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
+  
+  // Sort entries chronologically by date
+  filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  const now = new Date();
+  if (period === 'week') {
+    const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    filtered = filtered.filter(e => new Date(e.date) >= cutoff);
+  } else if (period === 'month') {
+    const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    filtered = filtered.filter(e => new Date(e.date) >= cutoff);
+  } else if (period === 'year') {
+    const cutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    filtered = filtered.filter(e => new Date(e.date) >= cutoff);
+  }
+  
+  let currentSum = 0;
+  const dataPoints = [{ date: 'Start', pl: 0 }];
+  filtered.forEach(entry => {
+    const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    currentSum += plValue;
+    dataPoints.push({ date: entry.date, pl: currentSum });
+  });
+  
+  return dataPoints;
+}
+
+function generateEquityCurveSVG(dataPoints, width = 800, height = 200) {
+  if (dataPoints.length <= 1) {
+    return `
+      <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="background: rgba(255,255,255,0.02); border-radius: 12px;">
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="var(--text-muted)" font-size="13">No trade data available for this period</text>
+      </svg>
+    `;
+  }
+  
+  const pls = dataPoints.map(d => d.pl);
+  const maxPL = Math.max(...pls, 0);
+  const minPL = Math.min(...pls, 0);
+  const plRange = maxPL - minPL || 1;
+  
+  const padX = 50;
+  const padY = 20;
+  
+  const points = dataPoints.map((d, i) => {
+    const x = padX + (i / (dataPoints.length - 1)) * (width - 2 * padX);
+    const y = padY + (1 - (d.pl - minPL) / plRange) * (height - 2 * padY);
+    return { x, y, pl: d.pl, date: d.date };
+  });
+  
+  // Zero line
+  const zeroY = padY + (1 - (0 - minPL) / plRange) * (height - 2 * padY);
+  
+  // Create path (Bezier curve)
+  let pathD = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    
+    const cp1x = p0.x + (p1.x - p0.x) / 3;
+    const cp1y = p0.y;
+    const cp2x = p0.x + 2 * (p1.x - p0.x) / 3;
+    const cp2y = p1.y;
+    
+    pathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p1.x} ${p1.y}`;
+  }
+  
+  // Create area path (for gradient fill)
+  const areaD = `${pathD} L ${points[points.length - 1].x} ${height - padY} L ${points[0].x} ${height - padY} Z`;
+  
+  const isNetPositive = dataPoints[dataPoints.length - 1].pl >= 0;
+  const strokeColor = isNetPositive ? 'var(--color-bull)' : 'var(--color-bear)';
+  const gradId = `equity-grad-${Math.random().toString(36).substr(2, 9)}`;
+  
+  let gridLines = '';
+  const gridCount = 4;
+  for (let i = 0; i <= gridCount; i++) {
+    const val = minPL + (i / gridCount) * plRange;
+    const y = padY + (1 - (val - minPL) / plRange) * (height - 2 * padY);
+    gridLines += `
+      <line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1" stroke-dasharray="4 4" />
+      <text x="${padX - 8}" y="${y + 4}" fill="var(--text-muted)" font-size="9" text-anchor="end">₹${Math.round(val).toLocaleString()}</text>
+    `;
+  }
+
+  let dots = '';
+  points.forEach((p, idx) => {
+    if (points.length < 50 || idx === 0 || idx === points.length - 1) {
+      dots += `
+        <circle cx="${p.x}" cy="${p.y}" r="4" fill="${strokeColor}" stroke="var(--bg-primary)" stroke-width="2">
+          <title>${p.date}: ₹${p.pl.toLocaleString()}</title>
+        </circle>
+      `;
+    }
+  });
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="overflow: visible;">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.2" />
+          <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.0" />
+        </linearGradient>
+      </defs>
+      
+      ${gridLines}
+      
+      <line x1="${padX}" y1="${zeroY}" x2="${width - padX}" y2="${zeroY}" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1" />
+      <text x="${width - padX + 8}" y="${zeroY + 4}" fill="var(--text-muted)" font-size="9" text-anchor="start">Breakeven</text>
+
+      <path d="${areaD}" fill="url(#${gradId})" />
+      
+      <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      
+      ${dots}
+      
+      <text x="${padX}" y="${height - 4}" fill="var(--text-muted)" font-size="9" text-anchor="start">${dataPoints[0].date === 'Start' ? (dataPoints[1] ? dataPoints[1].date : '') : dataPoints[0].date}</text>
+      <text x="${width - padX}" y="${height - 4}" fill="var(--text-muted)" font-size="9" text-anchor="end">${dataPoints[dataPoints.length - 1].date}</text>
+    </svg>
+  `;
+}
+
+function switchEquityPeriod(period) {
+  currentEquityPeriod = period;
+  renderDesktopStats();
+  renderMobileStats();
+}
+
+function toggleMissedSetupsAccordion(headerEl) {
+  const content = headerEl.nextElementSibling;
+  const chevron = headerEl.querySelector('.accordion-chevron');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    if (chevron) chevron.style.transform = 'rotate(90deg)';
+  } else {
+    content.style.display = 'none';
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
+function renderJournalStatsTab(isMobile = false) {
+  const stats = calculateJournalStats();
+
+  // 1. Equity Curve Section
+  const equityData = getEquityCurveData(currentEquityPeriod);
+  const latestPL = equityData.length > 0 ? equityData[equityData.length - 1].pl : 0;
+  const equitySvg = generateEquityCurveSVG(equityData, isMobile ? 500 : 800, 200);
+  
+  const eqPeriods = ['week', 'month', 'year', 'all'];
+  let equityToggleHtml = `<div class="period-selector equity-period-selector" style="margin: 0;">`;
+  eqPeriods.forEach(p => {
+    const activeClass = currentEquityPeriod === p ? 'active' : '';
+    const label = p === 'all' ? 'ALL' : p.toUpperCase();
+    equityToggleHtml += `<button class="period-btn ${activeClass}" onclick="switchEquityPeriod('${p}')">${label}</button>`;
+  });
+  equityToggleHtml += `</div>`;
+
+  const equityCurveCardHtml = `
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '16px' : '24px'};">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Equity Curve</div>
+          <div style="font-size:22px; font-weight:800; color:${latestPL >= 0 ? 'var(--color-bull)' : 'var(--color-bear)'}; margin-top:2px;">
+            ₹${latestPL >= 0 ? '+' : ''}${latestPL.toLocaleString()}
           </div>
-          <span class="stats-rank-badge">${count} setups</span>
+        </div>
+        ${equityToggleHtml}
+      </div>
+      <div style="width:100%; overflow:hidden;">
+        ${equitySvg}
+      </div>
+    </div>
+  `;
+  
+  const activityHtml = `
+    <div class="stats-section-title">Trade Activity</div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 2 : 4}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Total Entries</div>
+        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.totalEntries}</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">All setups logged</div>
+      </div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Executed Trades</div>
+        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.executedCount}</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">PASSED or FAILED</div>
+      </div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Missed Setups</div>
+        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.missedCount}</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Marked as MISSED</div>
+      </div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Trading Days</div>
+        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.tradingDays}</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Days with execution</div>
+      </div>
+    </div>
+    <div style="margin-top:10px; font-size:11px; color:var(--text-muted); font-weight:500;">
+      No-trade calendar days (weekdays with no execution): <strong>${stats.noTradeDays} days</strong>
+    </div>
+  `;
+
+  const pnlClass = stats.netPL >= 0 ? 'bull' : 'bear';
+  const metricsHtml = `
+    <div class="stats-section-title">Performance Metrics</div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 2 : 4}, 1fr); gap: ${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '12px' : '20px'};">
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Net P&L</div>
+        <div class="apple-metric-value ${pnlClass}" style="font-size:${isMobile ? '20px' : '24px'};">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Gross: ₹+${stats.grossProfit.toLocaleString()} / ₹-${Math.abs(stats.grossLoss).toLocaleString()}</div>
+      </div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Win Rate</div>
+        <div class="apple-metric-value win" style="font-size:${isMobile ? '20px' : '24px'};">${stats.winRate.toFixed(1)}%</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Based on executed trades</div>
+      </div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Profit Days</div>
+        <div class="apple-metric-value bull" style="font-size:${isMobile ? '20px' : '24px'};">${stats.winDaysCount} days</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Days with positive Net P&L</div>
+      </div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Losing Days</div>
+        <div class="apple-metric-value bear" style="font-size:${isMobile ? '20px' : '24px'};">${stats.lossDaysCount} days</div>
+        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Days with negative Net P&L</div>
+      </div>
+    </div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
+      <div class="apple-insight-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div class="apple-insight-title" style="font-size:11px;">Best Day / Average Winning Day</div>
+        <div class="apple-insight-value bull" style="font-size:${isMobile ? '14px' : '16px'}; font-weight:700;">${stats.bestDayStr}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Average Win Day: ₹+${stats.avgWinDay.toFixed(0)}</div>
+      </div>
+      <div class="apple-insight-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div class="apple-insight-title" style="font-size:11px;">Worst Day / Average Losing Day</div>
+        <div class="apple-insight-value bear" style="font-size:${isMobile ? '14px' : '16px'}; font-weight:700;">${stats.worstDayStr}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Average Loss Day: ₹-${Math.abs(stats.avgLossDay).toFixed(0)}</div>
+      </div>
+    </div>
+  `;
+
+  const timelineHtml = `
+    <div class="stats-section-title">P&L Timeline</div>
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+      ${generateStatsPeriodSelectorHTML ? generateStatsPeriodSelectorHTML() : ''}
+      <div id="${isMobile ? 'mobile' : 'desktop'}-pnl-timeline-table-wrapper" style="max-height: 250px; overflow-y: auto;">
+        ${generatePLTimelineTableHTML(stats, currentStatsPeriod)}
+      </div>
+    </div>
+  `;
+
+  function generateStatsPeriodSelectorHTML() {
+    const periods = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
+    let periodSelectorHtml = `<div class="period-selector timeline-period-selector">`;
+    periods.forEach(p => {
+      const activeClass = currentStatsPeriod === p ? 'active' : '';
+      periodSelectorHtml += `<button class="period-btn ${activeClass}" data-period="${p}" onclick="switchStatsPeriod('${p}')">${p.toUpperCase()}</button>`;
+    });
+    periodSelectorHtml += `</div>`;
+    return periodSelectorHtml;
+  }
+
+  const calendarHtml = `
+    <div class="stats-section-title">Performance Calendar</div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: ${isMobile ? '1fr' : '1.2fr 0.8fr'}; gap: ${isMobile ? '12px' : '20px'};">
+      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};" id="${isMobile ? 'mobile' : 'desktop'}-stats-calendar-wrapper">
+        ${generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth)}
+      </div>
+      <div id="${isMobile ? 'mobile' : 'desktop'}-stats-day-detail-wrapper" style="min-height: 100px;">
+        <div class="stats-day-detail" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+          Click any date on the calendar to view trade details here.
+        </div>
+      </div>
+    </div>
+  `;
+
+  let leaderboardRows = '';
+  stats.patternLeaderboard.forEach((p, idx) => {
+    leaderboardRows += `
+      <tr onclick="openPatternSubGallery('${p.name}')">
+        <td style="font-weight:700; color:var(--text-muted); width:40px;">#${idx + 1}</td>
+        <td style="font-weight:600; color:var(--text-main);">${p.name}</td>
+        <td class="${p.totalPL >= 0 ? 'bull' : 'bear'}" style="font-weight:700; text-align:right;">₹${p.totalPL >= 0 ? '+' : ''}${p.totalPL.toLocaleString()}</td>
+        <td style="text-align:right; color:var(--text-secondary);">${p.count} trades</td>
+        <td style="text-align:right; font-weight:600; color:var(--color-bull);">${p.winRate.toFixed(1)}%</td>
+      </tr>
+    `;
+  });
+  if (stats.patternLeaderboard.length === 0) {
+    leaderboardRows = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">No patterns found.</td></tr>`;
+  }
+
+  const leaderboardHtml = `
+    <div class="stats-section-title">Setup Performance Leaderboard</div>
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'}; overflow-x:auto;">
+      <table class="stats-leaderboard-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Setup Name</th>
+            <th style="text-align:right;">Net P&L</th>
+            <th style="text-align:right;">Trades</th>
+            <th style="text-align:right;">Win Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${leaderboardRows}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Missed Setups Accordion Section
+  const missedEntries = entries.filter(e => e.status === 'MISSED');
+  const missedCount = missedEntries.length;
+  
+  let missedContent = '';
+  if (missedCount === 0) {
+    missedContent = `
+      <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:13px;">
+        No missed setups logged — great discipline! ✅
+      </div>
+    `;
+  } else {
+    let gridHtml = `<div class="missed-setups-grid" style="margin-top: 10px;">`;
+    missedEntries.forEach(entry => {
+      const firstImg = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+      const imgHtml = firstImg 
+        ? `<img src="${firstImg}" class="missed-setup-thumb" />` 
+        : `<div class="missed-setup-thumb" style="display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:24px; background:var(--bg-secondary);"><i class="fa-solid fa-chart-line"></i></div>`;
+      
+      gridHtml += `
+        <div class="missed-setup-card" onclick="openEntryDetail('${entry.id}')">
+          ${imgHtml}
+          <div class="missed-setup-info">
+            <div class="missed-date">${entry.date}</div>
+            <div class="missed-tags" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${entry.patterns.join(', ') || 'No Setup Name'}</div>
+          </div>
         </div>
       `;
     });
-    if (sortedBullish.length === 0) bullHtml = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">No bullish patterns logged.</div>';
+    gridHtml += `</div>`;
+    missedContent = gridHtml;
+  }
 
-    let bearHtml = '';
-    sortedBearish.forEach(([name, count], index) => {
-      bearHtml += `
-        <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
-          <div class="stats-rank-label">
-            <span class="stats-rank-number">${index + 1}.</span>
-            <span>${name}</span>
-          </div>
-          <span class="stats-rank-badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--color-bear);">${count} setups</span>
-        </div>
-      `;
-    });
-    if (sortedBearish.length === 0) bearHtml = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">No bearish patterns logged.</div>';
+  const missedHtml = `
+    <div class="stats-section-title">Missed Setup Analysis</div>
+    <div class="missed-setups-accordion">
+      <div class="missed-setups-header" onclick="toggleMissedSetupsAccordion(this)">
+        <span style="font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--text-main); font-size: 14px;">
+          <i class="fa-solid fa-chevron-right accordion-chevron" style="transition: transform 0.2s; color: var(--text-muted);"></i>
+          Missed Setups (${missedCount})
+        </span>
+        <span style="font-size: 11px; color: var(--text-muted);">Click to expand/collapse</span>
+      </div>
+      <div class="missed-setups-content" style="display: none;">
+        ${missedContent}
+      </div>
+    </div>
+  `;
 
-    container.innerHTML = `
-      <div style="padding: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
-        <div>
-          <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 12px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-arrow-trend-up" style="color:var(--color-bull);"></i> Bullish Setups Usage</h3>
-          <div class="stats-rank-list">
-            ${bullHtml}
-          </div>
-        </div>
-        
-        <div>
-          <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 12px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-arrow-trend-down" style="color:var(--color-bear);"></i> Bearish Setups Usage</h3>
-          <div class="stats-rank-list">
-            ${bearHtml}
-          </div>
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  let dowRows = '';
+  let bestDow = -1, bestDowVal = -Infinity;
+  let worstDow = -1, worstDowVal = Infinity;
+  for (let i = 1; i <= 5; i++) {
+    const val = stats.byDayOfWeek[i] || 0;
+    if (val > bestDowVal) { bestDowVal = val; bestDow = i; }
+    if (val < worstDowVal) { worstDowVal = val; worstDow = i; }
+  }
+
+  for (let i = 1; i <= 5; i++) {
+    const val = stats.byDayOfWeek[i] || 0;
+    const count = stats.dayOfWeekTradeCount[i] || 0;
+    const highlightClass = i === bestDow ? 'bull' : (i === worstDow ? 'bear' : '');
+    dowRows += `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <span style="font-weight:600; color:var(--text-secondary);">${daysOfWeek[i]}</span>
+        <div style="text-align:right;">
+          <span class="${highlightClass}" style="font-weight:700;">₹${val >= 0 ? '+' : ''}${val.toLocaleString()}</span>
+          <div style="font-size:10px; color:var(--text-muted);">${count} trades</div>
         </div>
       </div>
     `;
   }
+
+  let monthlyTrendRows = '';
+  const sortedMonths = Object.keys(stats.byMonth).sort();
+  sortedMonths.forEach(m => {
+    const val = stats.byMonth[m];
+    const count = stats.monthTradeCount[m] || 0;
+    monthlyTrendRows += `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <span style="font-weight:600; color:var(--text-secondary);">${m}</span>
+        <div style="text-align:right;">
+          <span class="${val >= 0 ? 'bull' : 'bear'}" style="font-weight:700;">₹${val >= 0 ? '+' : ''}${val.toLocaleString()}</span>
+          <div style="font-size:10px; color:var(--text-muted);">${count} trades</div>
+        </div>
+      </div>
+    `;
+  });
+  if (sortedMonths.length === 0) {
+    monthlyTrendRows = `<div style="text-align:center; color:var(--text-muted); padding:16px; font-size:13px;">No monthly data available.</div>`;
+  }
+
+  const timeAnalyticsHtml = `
+    <div class="stats-section-title">Time-Based Analytics</div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: ${isMobile ? '1fr' : '1fr 1fr'}; gap: ${isMobile ? '12px' : '20px'};">
+      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+        <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">Day of Week Performance</div>
+        <div>
+          ${dowRows}
+        </div>
+      </div>
+      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+        <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">Monthly Performance Trend</div>
+        <div style="max-height: 250px; overflow-y: auto;">
+          ${monthlyTrendRows}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const exportHtml = `
+    <div class="stats-section-title">Export Options</div>
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Download journal entries and metrics for offline analysis or physical backup.</div>
+      <div class="export-buttons-row">
+        <button class="btn-primary" onclick="exportJournalCSV()" style="font-size:12px; padding:6px 14px; border-radius:100px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+        <button class="btn-secondary" onclick="exportJournalExcel()" style="font-size:12px; padding:6px 14px; border-radius:100px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-excel"></i> Export Excel</button>
+        <button class="btn-secondary" onclick="exportJournalPDF()" style="font-size:12px; padding:6px 14px; border-radius:100px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-pdf"></i> Save PDF / Print</button>
+      </div>
+    </div>
+  `;
+
+  return `
+    <div style="display:flex; flex-direction:column; gap:${isMobile ? '20px' : '32px'}; padding: ${isMobile ? '0 10px 24px' : '0 24px 40px'}; max-width:1200px; margin:0 auto;">
+      ${equityCurveCardHtml}
+      ${activityHtml}
+      ${metricsHtml}
+      ${timelineHtml}
+      ${calendarHtml}
+      ${leaderboardHtml}
+      ${missedHtml}
+      ${timeAnalyticsHtml}
+      ${exportHtml}
+    </div>
+  `;
+}
+
+function exportJournalCSV() {
+  let csvContent = "Date,Patterns,Bias,P&L,Status,Market,Notes,Mistakes\n";
+  entries.forEach(e => {
+    const plRaw = e.customAttributes ? e.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    const market = e.customAttributes ? (e.customAttributes['Market'] || '') : '';
+    
+    const escapeCsv = (str) => {
+      if (!str) return '';
+      const stringified = String(str).replace(/"/g, '""');
+      return stringified.includes(',') || stringified.includes('\n') || stringified.includes('"') 
+        ? `"${stringified}"` 
+        : stringified;
+    };
+
+    csvContent += [
+      escapeCsv(e.date),
+      escapeCsv(e.patterns.join(';')),
+      escapeCsv(e.bias),
+      plValue,
+      escapeCsv(e.status),
+      escapeCsv(market),
+      escapeCsv(e.notes || ''),
+      escapeCsv(e.mistakes || '')
+    ].join(',') + '\n';
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `trading_journal_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function exportJournalExcel() {
+  let csvContent = "\uFEFFDate,Patterns,Bias,P&L,Status,Market,Notes,Mistakes\n";
+  entries.forEach(e => {
+    const plRaw = e.customAttributes ? e.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    const market = e.customAttributes ? (e.customAttributes['Market'] || '') : '';
+    
+    const escapeCsv = (str) => {
+      if (!str) return '';
+      const stringified = String(str).replace(/"/g, '""');
+      return stringified.includes(',') || stringified.includes('\n') || stringified.includes('"') 
+        ? `"${stringified}"` 
+        : stringified;
+    };
+
+    csvContent += [
+      escapeCsv(e.date),
+      escapeCsv(e.patterns.join(';')),
+      escapeCsv(e.bias),
+      plValue,
+      escapeCsv(e.status),
+      escapeCsv(market),
+      escapeCsv(e.notes || ''),
+      escapeCsv(e.mistakes || '')
+    ].join(',') + '\n';
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `trading_journal_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function exportJournalPDF() {
+  const stats = calculateJournalStats();
+  const printWindow = window.open('', '_blank');
+  
+  let leaderboardRows = '';
+  stats.patternLeaderboard.forEach((p, idx) => {
+    leaderboardRows += `
+      <tr>
+        <td>#${idx + 1}</td>
+        <td>${p.name}</td>
+        <td class="${p.totalPL >= 0 ? 'bull' : 'bear'}">₹${p.totalPL >= 0 ? '+' : ''}${p.totalPL.toLocaleString()}</td>
+        <td>${p.count}</td>
+        <td>${p.winRate.toFixed(1)}%</td>
+      </tr>
+    `;
+  });
+
+  let entryRows = '';
+  entries.forEach(e => {
+    const plRaw = e.customAttributes ? e.customAttributes['P&L'] : 0;
+    const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+    entryRows += `
+      <div class="entry-card">
+        <div style="display:flex; justify-content:space-between; font-weight:bold; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:6px;">
+          <span>${e.date} - ${e.patterns.join(', ') || 'No pattern'} (${e.bias})</span>
+          <span class="${plValue >= 0 ? 'bull' : 'bear'}">₹${plValue >= 0 ? '+' : ''}${plValue.toLocaleString()} [${e.status}]</span>
+        </div>
+        <div style="font-size:12px; margin-bottom:4px;"><strong>Notes:</strong> ${e.notes || 'N/A'}</div>
+        <div style="font-size:12px;"><strong>Mistakes:</strong> ${e.mistakes || 'N/A'}</div>
+      </div>
+    `;
+  });
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Trading Journal Performance Report</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; padding: 20px; line-height: 1.4; }
+          h1, h2 { font-family: inherit; margin-bottom: 8px; }
+          .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+          .metric-card { border: 1px solid #ccc; padding: 12px; border-radius: 8px; background: #fafafa; }
+          .metric-label { font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; }
+          .metric-value { font-size: 20px; font-weight: bold; margin-top: 4px; }
+          .bull { color: #2e7d32; }
+          .bear { color: #c62828; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
+          th { background-color: #f5f5f5; }
+          .entry-card { border: 1px solid #eee; border-radius: 6px; padding: 10px; margin-bottom: 12px; page-break-inside: avoid; }
+        </style>
+      </head>
+      <body>
+        <h1>Trading Journal Performance Report</h1>
+        <p style="font-size:12px; color:#666; margin-bottom:20px;">Generated on ${new Date().toLocaleString()}</p>
+        
+        <div class="summary-grid">
+          <div class="metric-card">
+            <div class="metric-label">Total Entries</div>
+            <div class="metric-value">${stats.totalEntries}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Executed Trades</div>
+            <div class="metric-value">${stats.executedCount}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Net P&L</div>
+            <div class="metric-value ${stats.netPL >= 0 ? 'bull' : 'bear'}">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Win Rate</div>
+            <div class="metric-value bull">${stats.winRate.toFixed(1)}%</div>
+          </div>
+        </div>
+
+        <h2>Setup Leaderboard</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Setup Name</th>
+              <th>Net P&L</th>
+              <th>Trades</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${leaderboardRows}
+          </tbody>
+        </table>
+
+        <h2>Detailed Trading Logs</h2>
+        ${entryRows}
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 500);
 }
 
 // Settings View - render storagePath dynamically with Apple Settings list layout
@@ -1752,6 +2896,7 @@ function renderDesktopSettings() {
 
 // Notion Detail Draw Panel (Desktop)
 function openEntryDetail(id) {
+  discardEmptyEntryIfNecessary();
   activeEntryId = id;
   activeImageIndex = 0; // Reset active image viewer to the first image
   
@@ -1766,6 +2911,7 @@ function openEntryDetail(id) {
 }
 
 function closeDesktopDetail() {
+  discardEmptyEntryIfNecessary();
   document.getElementById('desktop-detail-pane').classList.add('closed');
   activeEntryId = null;
   renderAll();
@@ -1843,15 +2989,45 @@ function renderDesktopDetail() {
   const patternRow = createAttributeRowHTML('Patterns', tagSelectorHTML, 'fa-solid fa-tags');
   attrList.appendChild(patternRow);
 
-  // P&F Status
-  const statusRow = createAttributeRowHTML('P/F Status', `<select class="input-select" onchange="saveCurrentField('status', this.value)">
-    <option value="PASSED" ${entry.status === 'PASSED' ? 'selected' : ''}>PASSED</option>
-    <option value="FAILED" ${entry.status === 'FAILED' ? 'selected' : ''}>FAILED</option>
-  </select>`, 'fa-solid fa-circle-check');
+  // Status
+  let statusBadgeClass = 'status-missed';
+  if (entry.status === 'PASSED') statusBadgeClass = 'status-passed';
+  if (entry.status === 'FAILED') statusBadgeClass = 'status-failed';
+
+  const statusRow = createAttributeRowHTML('Status', `
+    <span class="tag-badge ${statusBadgeClass}" style="font-weight: 700; padding: 4px 12px; border-radius: 6px; font-size: 11px;">${entry.status}</span>
+  `, 'fa-solid fa-circle-check');
   attrList.appendChild(statusRow);
+
+  // Entry and Exit Price (side-by-side)
+  const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
+  const entryPriceRow = createAttributeRowHTML('Entry Price', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  
+  const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
+  const exitPriceRow = createAttributeRowHTML('Exit Price', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+
+  const pricePair = document.createElement('div');
+  pricePair.className = 'attribute-row-pair';
+  pricePair.appendChild(entryPriceRow);
+  pricePair.appendChild(exitPriceRow);
+  attrList.appendChild(pricePair);
+
+  // Quantity and Charges (side-by-side)
+  const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
+  const quantityRow = createAttributeRowHTML('Quantity', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  
+  const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
+  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" onchange="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
+
+  const qtyChargesPair = document.createElement('div');
+  qtyChargesPair.className = 'attribute-row-pair';
+  qtyChargesPair.appendChild(quantityRow);
+  qtyChargesPair.appendChild(chargesRow);
+  attrList.appendChild(qtyChargesPair);
 
   // Secondary Custom Attributes (Market, P&L as number, plus new additions with trash bins)
   customAttributes.forEach(attr => {
+    if (attr.name === 'Entry Price' || attr.name === 'Exit Price' || attr.name === 'Quantity' || attr.name === 'Charges') return;
     let inputHTML = '';
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
     
@@ -2211,7 +3387,7 @@ function togglePatternTag(tagName) {
   }
 
   saveDatabase(entry, false, true); // Immediate save
-  renderAll();
+  renderDetailOnly();
 }
 
 function saveCurrentField(field, val) {
@@ -2224,16 +3400,7 @@ function saveCurrentField(field, val) {
   const immediate = (field !== 'notes' && field !== 'mistakes');
   saveDatabase(entry, false, immediate);
   
-  // Only re-render list if the field affects the list visualization
-  if (field !== 'notes' && field !== 'mistakes') {
-    const processedList = getProcessedEntries(desktopSearchText, activeCalendarDate);
-    if (desktopLayout === 'gallery') {
-      renderDesktopGallery(processedList);
-    } else {
-      renderDesktopTable(processedList);
-    }
-    renderMobileContent();
-  }
+  renderDetailOnly();
 }
 
 // Save Custom Attributes
@@ -2242,10 +3409,52 @@ function saveCustomAttribute(attrName, val) {
   if (!entry) return;
 
   entry.customAttributes[attrName] = val;
+  if (attrName === 'P&L') {
+    updateEntryStatus(entry);
+  }
   entry.updatedAt = new Date().toISOString();
   saveDatabase();
 
-  renderAll();
+  renderDetailOnly();
+}
+
+// Save and calculate fields (Entry Price, Exit Price, Quantity, Charges)
+function saveCalculateAttribute(attrName, valStr) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return;
+
+  if (!entry.customAttributes) {
+    entry.customAttributes = {};
+  }
+
+  const val = valStr === '' ? '' : Number(valStr);
+  entry.customAttributes[attrName] = val;
+
+  // Check if all 4 are filled
+  const ep = entry.customAttributes['Entry Price'];
+  const xp = entry.customAttributes['Exit Price'];
+  const qty = entry.customAttributes['Quantity'];
+  const chg = entry.customAttributes['Charges'];
+
+  if (ep !== '' && ep !== undefined && ep !== null &&
+      xp !== '' && xp !== undefined && xp !== null &&
+      qty !== '' && qty !== undefined && qty !== null &&
+      chg !== '' && chg !== undefined && chg !== null) {
+    
+    // Auto-calculate P&L = (Exit Price - Entry Price) * Quantity - Charges
+    const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
+    entry.customAttributes['P&L'] = computedPL;
+  } else if (attrName === 'Entry Price' || attrName === 'Exit Price' || attrName === 'Quantity' || attrName === 'Charges') {
+    // If one of the 4 fields is cleared or incomplete, clear P&L
+    entry.customAttributes['P&L'] = '';
+  }
+
+  // Always update status based on current P&L
+  updateEntryStatus(entry);
+
+  entry.updatedAt = new Date().toISOString();
+  saveDatabase();
+  renderDetailOnly();
 }
 
 // Dialog boxes (custom attribute popup UI)
@@ -2541,7 +3750,7 @@ function createNewEntry() {
     bias: "Bullish",
     date: today,
     patterns: [],
-    status: "PASSED",
+    status: "MISSED",
     images: [],
     notes: "",
     mistakes: "",
@@ -2555,6 +3764,8 @@ function createNewEntry() {
   customAttributes.forEach(attr => {
     newEntry.customAttributes[attr.name] = attr.defaultValue !== undefined ? attr.defaultValue : '';
   });
+
+  updateEntryStatus(newEntry);
 
   entries.push(newEntry);
   saveDatabase(newEntry);
@@ -2597,7 +3808,7 @@ function handleImageFileSelect(input, platform) {
       activeImageIndex = entry.images.length - 1; // set new image as active
       entry.updatedAt = new Date().toISOString();
       saveDatabase(entry);
-      renderAll();
+      renderDetailOnly();
     }
   };
   reader.readAsDataURL(file);
@@ -2614,7 +3825,7 @@ function deleteActiveImage(platform) {
   }
   entry.updatedAt = new Date().toISOString();
   saveDatabase(entry);
-  renderAll();
+  renderDetailOnly();
 }
 
 // Delete a specific image by index from thumbnail strip
@@ -2628,7 +3839,7 @@ function deleteImageByIndex(index) {
   }
   entry.updatedAt = new Date().toISOString();
   saveDatabase(entry);
-  renderAll();
+  renderDetailOnly();
 }
 
 function renderThumbnailStrip(entry, platform) {
@@ -2644,7 +3855,7 @@ function renderThumbnailStrip(entry, platform) {
     thumb.className = `thumbnail-item ${idx === activeImageIndex ? 'active' : ''}`;
     thumb.onclick = () => {
       activeImageIndex = idx;
-      renderAll();
+      renderDetailOnly();
     };
     thumb.innerHTML = `
       <img src="${imgSrc}" class="thumbnail-img">
@@ -2726,14 +3937,10 @@ function switchMobileView(view) {
   } else if (view === 'calendar') {
     calendar.style.display = 'block';
     renderMobileCalendar();
-  } else if (view === 'stats') {
-    headerTitle.textContent = 'Statistics';
-    stats.style.display = 'block';
-    renderMobileStats();
   } else if (view === 'dashboard') {
     headerTitle.textContent = 'Dashboard';
-    dashboard.style.display = 'block';
-    renderMobileDashboard();
+    stats.style.display = 'block';
+    renderMobileStats();
   } else if (view === 'more') {
     headerTitle.textContent = 'Settings';
     more.style.display = 'block';
@@ -2825,6 +4032,7 @@ function renderMobileGallery(list) {
 
 // Mobile Details close arrow trigger
 function closeMobileDetail() {
+  discardEmptyEntryIfNecessary();
   const mobileDetail = document.getElementById('mobile-detail-pane');
   if (mobileDetail) mobileDetail.classList.remove('open');
   activeEntryId = null;
@@ -2907,15 +4115,45 @@ function renderMobileDetail() {
   const patternRow = createAttributeRowHTML('Patterns', tagSelectorHTML, 'fa-solid fa-tags');
   attrList.appendChild(patternRow);
 
-  // P&F Status
-  const statusRow = createAttributeRowHTML('P/F Status', `<select class="input-select" onchange="saveCurrentField('status', this.value)">
-    <option value="PASSED" ${entry.status === 'PASSED' ? 'selected' : ''}>PASSED</option>
-    <option value="FAILED" ${entry.status === 'FAILED' ? 'selected' : ''}>FAILED</option>
-  </select>`, 'fa-solid fa-circle-check');
+  // Status
+  let statusBadgeClass = 'status-missed';
+  if (entry.status === 'PASSED') statusBadgeClass = 'status-passed';
+  if (entry.status === 'FAILED') statusBadgeClass = 'status-failed';
+
+  const statusRow = createAttributeRowHTML('Status', `
+    <span class="tag-badge ${statusBadgeClass}" style="font-weight: 700; padding: 4px 12px; border-radius: 6px; font-size: 11px;">${entry.status}</span>
+  `, 'fa-solid fa-circle-check');
   attrList.appendChild(statusRow);
+
+  // Entry and Exit Price (side-by-side)
+  const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
+  const entryPriceRow = createAttributeRowHTML('Entry Price', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  
+  const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
+  const exitPriceRow = createAttributeRowHTML('Exit Price', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+
+  const pricePair = document.createElement('div');
+  pricePair.className = 'attribute-row-pair';
+  pricePair.appendChild(entryPriceRow);
+  pricePair.appendChild(exitPriceRow);
+  attrList.appendChild(pricePair);
+
+  // Quantity and Charges (side-by-side)
+  const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
+  const quantityRow = createAttributeRowHTML('Quantity', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  
+  const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
+  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" onchange="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
+
+  const qtyChargesPair = document.createElement('div');
+  qtyChargesPair.className = 'attribute-row-pair';
+  qtyChargesPair.appendChild(quantityRow);
+  qtyChargesPair.appendChild(chargesRow);
+  attrList.appendChild(qtyChargesPair);
 
   // Custom attributes (Market, P&L as number, plus new additions with trash bins)
   customAttributes.forEach(attr => {
+    if (attr.name === 'Entry Price' || attr.name === 'Exit Price' || attr.name === 'Quantity' || attr.name === 'Charges') return;
     let inputHTML = '';
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
     
@@ -2962,71 +4200,90 @@ function renderMobileStats() {
   const container = document.getElementById('mobile-stats-view');
   if (!container) return;
 
-  const bullishCounts = {};
-  const bearishCounts = {};
+  const activeSetup = currentStatsTab === 'setup' ? 'active' : '';
+  const activeJournal = currentStatsTab === 'journal' ? 'active' : '';
 
-  entries.forEach(entry => {
-    entry.patterns.forEach(pat => {
-      const tagObj = tags.find(t => t.name === pat);
-      const tagType = tagObj ? tagObj.type : 'Both';
-      
-      if (tagType === 'Bullish') {
-        bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-      } else if (tagType === 'Bearish') {
-        bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
-      } else {
-        if (entry.bias === 'Bullish') bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-        else if (entry.bias === 'Bearish') bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
-      }
+  let statsContent = '';
+
+  if (currentStatsTab === 'setup') {
+    const bullishCounts = {};
+    const bearishCounts = {};
+
+    entries.forEach(entry => {
+      entry.patterns.forEach(pat => {
+        const tagObj = tags.find(t => t.name === pat);
+        const tagType = tagObj ? tagObj.type : 'Both';
+        
+        if (tagType === 'Bullish') {
+          bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+        } else if (tagType === 'Bearish') {
+          bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+        } else {
+          if (entry.bias === 'Bullish') bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+          else if (entry.bias === 'Bearish') bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+        }
+      });
     });
-  });
 
-  const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1] - a[1]);
-  const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1] - a[1]);
+    const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1] - a[1]);
+    const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1] - a[1]);
 
-  let bullHtml = '';
-  sortedBullish.forEach(([name, count], index) => {
-    bullHtml += `
-      <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
-        <div class="stats-rank-label">
-          <span class="stats-rank-number">${index + 1}.</span>
-          <span>${name}</span>
+    let bullHtml = '';
+    sortedBullish.forEach(([name, count], index) => {
+      bullHtml += `
+        <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
+          <div class="stats-rank-label">
+            <span class="stats-rank-number">${index + 1}.</span>
+            <span>${name}</span>
+          </div>
+          <span class="stats-rank-badge" style="font-size:9px; padding:1px 6px;">${count}</span>
         </div>
-        <span class="stats-rank-badge" style="font-size:9px; padding:1px 6px;">${count}</span>
+      `;
+    });
+    if (sortedBullish.length === 0) bullHtml = '<div style="color:var(--text-muted); font-size:11px; padding:6px;">No bullish patterns.</div>';
+
+    let bearHtml = '';
+    sortedBearish.forEach(([name, count], index) => {
+      bearHtml += `
+        <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
+          <div class="stats-rank-label">
+            <span class="stats-rank-number">${index + 1}.</span>
+            <span>${name}</span>
+          </div>
+          <span class="stats-rank-badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--color-bear); font-size:9px; padding:1px 6px;">${count}</span>
+        </div>
+      `;
+    });
+    if (sortedBearish.length === 0) bearHtml = '<div style="color:var(--text-muted); font-size:11px; padding:6px;">No bearish patterns.</div>';
+
+    statsContent = `
+      <div style="padding: 10px;">
+        <div style="margin-bottom: 16px;">
+          <h3 style="font-family: var(--font-display); font-size: 13px; margin-bottom: 8px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrow-trend-up" style="color:var(--color-bull);"></i> Bullish Usage</h3>
+          <div class="stats-rank-list" style="gap:4px; margin-bottom:10px;">
+            ${bullHtml}
+          </div>
+        </div>
+        
+        <div>
+          <h3 style="font-family: var(--font-display); font-size: 13px; margin-bottom: 8px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrow-trend-down" style="color:var(--color-bear);"></i> Bearish Usage</h3>
+          <div class="stats-rank-list" style="gap:4px; margin-bottom:10px;">
+            ${bearHtml}
+          </div>
+        </div>
       </div>
     `;
-  });
-  if (sortedBullish.length === 0) bullHtml = '<div style="color:var(--text-muted); font-size:11px; padding:6px;">No bullish patterns.</div>';
-
-  let bearHtml = '';
-  sortedBearish.forEach(([name, count], index) => {
-    bearHtml += `
-      <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
-        <div class="stats-rank-label">
-          <span class="stats-rank-number">${index + 1}.</span>
-          <span>${name}</span>
-        </div>
-        <span class="stats-rank-badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--color-bear); font-size:9px; padding:1px 6px;">${count}</span>
-      </div>
-    `;
-  });
-  if (sortedBearish.length === 0) bearHtml = '<div style="color:var(--text-muted); font-size:11px; padding:6px;">No bearish patterns.</div>';
+  } else {
+    statsContent = renderJournalStatsTab(true);
+  }
 
   container.innerHTML = `
-    <div style="padding: 10px;">
-      <div style="margin-bottom: 16px;">
-        <h3 style="font-family: var(--font-display); font-size: 13px; margin-bottom: 8px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrow-trend-up" style="color:var(--color-bull);"></i> Bullish Usage</h3>
-        <div class="stats-rank-list" style="gap:4px; margin-bottom:10px;">
-          ${bullHtml}
-        </div>
-      </div>
-      
-      <div>
-        <h3 style="font-family: var(--font-display); font-size: 13px; margin-bottom: 8px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrow-trend-down" style="color:var(--color-bear);"></i> Bearish Usage</h3>
-        <div class="stats-rank-list" style="gap:4px; margin-bottom:10px;">
-          ${bearHtml}
-        </div>
-      </div>
+    <div class="stats-segmented-control" style="margin: 10px 10px 0;">
+      <button class="stats-tab-btn ${activeSetup}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('setup')">Setup Stats</button>
+      <button class="stats-tab-btn ${activeJournal}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('journal')">Journal Stats</button>
+    </div>
+    <div id="stats-tab-content-mobile" style="margin-top: 10px;">
+      ${statsContent}
     </div>
   `;
 }
@@ -3225,7 +4482,7 @@ function closePatternSubGallery() {
   const mStatsView = document.getElementById('mobile-stats-view');
   const mSubView = document.getElementById('mobile-pattern-subgallery-view');
   if (mStatsView && mSubView) {
-    if (currentMobileView === 'stats') {
+    if (currentMobileView === 'stats' || currentMobileView === 'dashboard') {
       mStatsView.style.display = 'block';
     }
     mSubView.style.display = 'none';
