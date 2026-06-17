@@ -625,6 +625,11 @@ async function loadDatabase() {
           try { tempEntries.push(JSON.parse(content)); } catch { /* skip corrupt file */ }
         }
         entries = tempEntries; // empty array = brand-new journal, that's fine
+        // Migrate loaded entries
+        entries.forEach(e => {
+          if (!e.images) e.images = e.image ? [e.image] : [];
+          updateEntryStatus(e);
+        });
       } catch (err) {
         console.error('Error reading entries directory:', err);
         entries = [];
@@ -669,9 +674,10 @@ function updateEntryStatus(entry) {
     entry.customAttributes = {};
   }
   const plRaw = entry.customAttributes['P&L'];
-  if (plRaw === undefined || plRaw === null || plRaw === '' || Number(plRaw) === 0) {
+  const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+  if (plValue === 0) {
     entry.status = 'MISSED';
-  } else if (Number(plRaw) > 0) {
+  } else if (plValue > 0) {
     entry.status = 'PASSED';
   } else {
     entry.status = 'FAILED';
