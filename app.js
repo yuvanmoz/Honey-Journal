@@ -120,6 +120,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('mobile-detail-notes')?.addEventListener('blur', blurSave);
   document.getElementById('mobile-detail-mistakes')?.addEventListener('blur', blurSave);
 
+  // Auto-save on page refresh/unload
+  window.addEventListener('beforeunload', () => {
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    discardEmptyEntryIfNecessary();
+    localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+    localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+    localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+  });
+
   // Wheel scroll zoom for desktop repositioning
   const desktopWrapper = document.getElementById('desktop-main-image-wrapper');
   if (desktopWrapper) {
@@ -622,11 +633,56 @@ async function loadDatabase() {
       // Load all entry files
       try {
         const filesContent = await invoke('fs_read_dir_json', { path: joinPath(storagePath, 'entries') });
-        const tempEntries = [];
+        const diskEntries = [];
         for (const content of filesContent) {
-          try { tempEntries.push(JSON.parse(content)); } catch { /* skip corrupt file */ }
+          try { diskEntries.push(JSON.parse(content)); } catch { /* skip corrupt file */ }
         }
-        entries = tempEntries; // empty array = brand-new journal, that's fine
+
+        // Recover unsaved changes from localStorage if any
+        const localEntriesStr = localStorage.getItem('honey_journal_entries');
+        if (localEntriesStr) {
+          try {
+            const localEntries = JSON.parse(localEntriesStr);
+            const recoveredEntries = [...diskEntries];
+            let needsSync = false;
+
+            localEntries.forEach(localEntry => {
+              const diskEntry = diskEntries.find(de => de.id === localEntry.id);
+              if (!diskEntry) {
+                // Entry exists in localStorage but not on disk. Check if it's empty.
+                if (!isEntryEmpty(localEntry)) {
+                  recoveredEntries.push(localEntry);
+                  needsSync = true;
+                  console.log(`Recovered unsaved entry ${localEntry.id} from localStorage`);
+                }
+              } else {
+                // Entry exists in both. Compare updatedAt.
+                const localTime = new Date(localEntry.updatedAt || 0).getTime();
+                const diskTime = new Date(diskEntry.updatedAt || 0).getTime();
+                if (localTime > diskTime) {
+                  const idx = recoveredEntries.findIndex(re => re.id === localEntry.id);
+                  if (idx !== -1) {
+                    recoveredEntries[idx] = localEntry;
+                    needsSync = true;
+                    console.log(`Recovered newer version of entry ${localEntry.id} from localStorage`);
+                  }
+                }
+              }
+            });
+
+            entries = recoveredEntries;
+
+            if (needsSync) {
+              saveDatabase(null, true, false);
+            }
+          } catch (e) {
+            console.error('Failed to parse localEntries for recovery:', e);
+            entries = diskEntries;
+          }
+        } else {
+          entries = diskEntries;
+        }
+
         // Migrate loaded entries
         entries.forEach(e => {
           if (!e.images) e.images = e.image ? [e.image] : [];
@@ -3022,10 +3078,15 @@ function openEntryDetail(id) {
 }
 
 function closeDesktopDetail() {
-  discardEmptyEntryIfNecessary();
-  document.getElementById('desktop-detail-pane').classList.add('closed');
-  activeEntryId = null;
-  renderAll();
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
+  setTimeout(() => {
+    discardEmptyEntryIfNecessary();
+    document.getElementById('desktop-detail-pane').classList.add('closed');
+    activeEntryId = null;
+    renderAll();
+  }, 100);
 }
 
 function renderDesktopDetail() {
@@ -3524,7 +3585,7 @@ function saveCustomAttribute(attrName, val) {
     updateEntryStatus(entry);
   }
   entry.updatedAt = new Date().toISOString();
-  saveDatabase();
+  saveDatabase(entry, false, true);
 
   renderDetailOnly();
 }
@@ -3564,7 +3625,7 @@ function saveCalculateAttribute(attrName, valStr) {
   updateEntryStatus(entry);
 
   entry.updatedAt = new Date().toISOString();
-  saveDatabase();
+  saveDatabase(entry, false, true);
   renderDetailOnly();
 }
 
@@ -3608,7 +3669,7 @@ function submitAddAttribute() {
   const defaultValue = type === 'number' ? 0 : (type === 'select' ? options[0] : '');
   const newAttr = { name, type, options, defaultValue };
   customAttributes.push(newAttr);
-  saveDatabase();
+  saveDatabase(null, true, true);
 
   // Populate dynamic default value in entries list
   entries.forEach(e => {
@@ -3616,7 +3677,7 @@ function submitAddAttribute() {
       e.customAttributes[name] = newAttr.defaultValue;
     }
   });
-  saveDatabase();
+  saveDatabase(null, true, true);
 
   nameInput.value = '';
   optionsInput.value = '';
@@ -3632,7 +3693,7 @@ function deleteCustomAttributeField(attrName) {
     entries.forEach(e => {
       delete e.customAttributes[attrName];
     });
-    saveDatabase();
+    saveDatabase(null, true, true);
     renderAll();
   }
 }
@@ -3846,7 +3907,7 @@ function toggleBookmark(id) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
   entry.bookmarked = !entry.bookmarked;
-  saveDatabase(entry);
+  saveDatabase(entry, false, true);
   renderAll();
 }
 
@@ -3879,7 +3940,7 @@ function createNewEntry() {
   updateEntryStatus(newEntry);
 
   entries.push(newEntry);
-  saveDatabase(newEntry);
+  saveDatabase(newEntry, false, true);
 
   openEntryDetail(newId);
 }
@@ -3890,7 +3951,7 @@ function deleteActiveEntry() {
   if (confirm("Are you sure you want to delete this trading journal entry?")) {
     const deletedId = activeEntryId;
     entries = entries.filter(e => e.id !== deletedId);
-    saveDatabase();
+    saveDatabase(null, true, true);
     if (window.__TAURI__ && storagePath) {
       removeEntryFromDisk(deletedId);
     }
@@ -3918,7 +3979,7 @@ function handleImageFileSelect(input, platform) {
       entry.images.push(e.target.result);
       activeImageIndex = entry.images.length - 1; // set new image as active
       entry.updatedAt = new Date().toISOString();
-      saveDatabase(entry);
+      saveDatabase(entry, false, true);
       renderDetailOnly();
     }
   };
@@ -3935,7 +3996,7 @@ function deleteActiveImage(platform) {
     activeImageIndex = Math.max(0, entry.images.length - 1);
   }
   entry.updatedAt = new Date().toISOString();
-  saveDatabase(entry);
+  saveDatabase(entry, false, true);
   renderDetailOnly();
 }
 
@@ -3949,7 +4010,7 @@ function deleteImageByIndex(index) {
     activeImageIndex = Math.max(0, entry.images.length - 1);
   }
   entry.updatedAt = new Date().toISOString();
-  saveDatabase(entry);
+  saveDatabase(entry, false, true);
   renderDetailOnly();
 }
 
@@ -4145,11 +4206,16 @@ function renderMobileGallery(list) {
 
 // Mobile Details close arrow trigger
 function closeMobileDetail() {
-  discardEmptyEntryIfNecessary();
-  const mobileDetail = document.getElementById('mobile-detail-pane');
-  if (mobileDetail) mobileDetail.classList.remove('open');
-  activeEntryId = null;
-  renderAll();
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
+  setTimeout(() => {
+    discardEmptyEntryIfNecessary();
+    const mobileDetail = document.getElementById('mobile-detail-pane');
+    if (mobileDetail) mobileDetail.classList.remove('open');
+    activeEntryId = null;
+    renderAll();
+  }, 100);
 }
 
 function renderMobileDetail() {
@@ -5380,7 +5446,7 @@ function readAndAddPastedImage(file) {
       entry.images.push(base64Src);
       activeImageIndex = entry.images.length - 1; // Show the newly pasted image immediately
       entry.updatedAt = new Date().toISOString();
-      saveDatabase(entry);
+      saveDatabase(entry, false, true);
       renderAll();
       showToast('Clipboard image pasted successfully!', 'success');
     }
