@@ -687,10 +687,26 @@ async function loadDatabase() {
         entries = [];
       }
 
-      // Mirror to localStorage as a fast-read cache
-      localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-      localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-      localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+      // Mirror to localStorage as a fast-read cache.
+      // IMPORTANT: this must be in its own try/catch — if a QuotaExceededError is
+      // thrown here it must NOT escape to the outer catch block, because that block
+      // treats any exception as a Tauri filesystem failure and falls back to reading
+      // the image-stripped localStorage cache, which would wipe images from the UI.
+      try {
+        localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+        localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+        localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+      } catch (quotaErr) {
+        // Quota exceeded — cache a slim version without images (disk is source of truth)
+        try {
+          const slim = entries.map(e => { const c = Object.assign({}, e); c.images = []; return c; });
+          localStorage.setItem('honey_journal_entries', JSON.stringify(slim));
+          localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+          localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+        } catch (e2) {
+          console.warn('localStorage full even after image strip on load mirror:', e2);
+        }
+      }
       return;
 
     } catch (err) {
