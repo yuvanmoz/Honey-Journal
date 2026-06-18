@@ -1642,52 +1642,73 @@ function renderDesktopStats() {
       const bullishCounts = {};
       const bearishCounts = {};
 
+      const incrementCount = (counts, pat, status) => {
+        if (!counts[pat]) {
+          counts[pat] = { passed: 0, missed: 0, failed: 0, total: 0 };
+        }
+        counts[pat].total += 1;
+        if (status === 'PASSED') counts[pat].passed += 1;
+        else if (status === 'FAILED') counts[pat].failed += 1;
+        else counts[pat].missed += 1;
+      };
+
       entries.forEach(entry => {
+        const status = entry.status || 'MISSED';
         entry.patterns.forEach(pat => {
           const tagObj = tags.find(t => t.name === pat);
           const tagType = tagObj ? tagObj.type : 'Both';
           
           if (tagType === 'Bullish') {
-            bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+            incrementCount(bullishCounts, pat, status);
           } else if (tagType === 'Bearish') {
-            bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+            incrementCount(bearishCounts, pat, status);
           } else {
-            if (entry.bias === 'Bullish') bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-            else if (entry.bias === 'Bearish') bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
-            else {
-              bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-              bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+            if (entry.bias === 'Bullish') {
+              incrementCount(bullishCounts, pat, status);
+            } else if (entry.bias === 'Bearish') {
+              incrementCount(bearishCounts, pat, status);
+            } else {
+              incrementCount(bullishCounts, pat, status);
+              incrementCount(bearishCounts, pat, status);
             }
           }
         });
       });
 
-      const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1] - a[1]);
-      const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1] - a[1]);
+      const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1].total - a[1].total);
+      const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1].total - a[1].total);
 
       let bullHtml = '';
-      sortedBullish.forEach(([name, count], index) => {
+      sortedBullish.forEach(([name, stats], index) => {
         bullHtml += `
           <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
             <div class="stats-rank-label">
               <span class="stats-rank-number">${index + 1}.</span>
               <span>${name}</span>
             </div>
-            <span class="stats-rank-badge">${count} setups</span>
+            <div class="stats-rank-badge-group" style="display: flex; gap: 6px;">
+              <span class="stats-rank-badge" style="background-color: rgba(162, 224, 72, 0.15); color: var(--color-bull); border: 1px solid rgba(162, 224, 72, 0.3);">${stats.passed} Passed</span>
+              <span class="stats-rank-badge" style="background-color: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3);">${stats.missed} Missed</span>
+              <span class="stats-rank-badge" style="background-color: rgba(255, 94, 94, 0.15); color: var(--color-bear); border: 1px solid rgba(255, 94, 94, 0.3);">${stats.failed} Failed</span>
+            </div>
           </div>
         `;
       });
       if (sortedBullish.length === 0) bullHtml = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">No bullish patterns logged.</div>';
 
       let bearHtml = '';
-      sortedBearish.forEach(([name, count], index) => {
+      sortedBearish.forEach(([name, stats], index) => {
         bearHtml += `
           <div class="stats-rank-item" onclick="openPatternSubGallery('${name}')">
             <div class="stats-rank-label">
               <span class="stats-rank-number">${index + 1}.</span>
               <span>${name}</span>
             </div>
-            <span class="stats-rank-badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--color-bear);">${count} setups</span>
+            <div class="stats-rank-badge-group" style="display: flex; gap: 6px;">
+              <span class="stats-rank-badge" style="background-color: rgba(162, 224, 72, 0.15); color: var(--color-bull); border: 1px solid rgba(162, 224, 72, 0.3);">${stats.passed} Passed</span>
+              <span class="stats-rank-badge" style="background-color: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3);">${stats.missed} Missed</span>
+              <span class="stats-rank-badge" style="background-color: rgba(255, 94, 94, 0.15); color: var(--color-bear); border: 1px solid rgba(255, 94, 94, 0.3);">${stats.failed} Failed</span>
+            </div>
           </div>
         `;
       });
@@ -3012,10 +3033,10 @@ function renderDesktopDetail() {
 
   // Entry and Exit Price (side-by-side)
   const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
-  const entryPriceRow = createAttributeRowHTML('Entry Price', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
   
   const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
-  const exitPriceRow = createAttributeRowHTML('Exit Price', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
 
   const pricePair = document.createElement('div');
   pricePair.className = 'attribute-row-pair';
@@ -3025,7 +3046,7 @@ function renderDesktopDetail() {
 
   // Quantity and Charges (side-by-side)
   const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
-  const quantityRow = createAttributeRowHTML('Quantity', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
   
   const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
   const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" onchange="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
@@ -4140,10 +4161,10 @@ function renderMobileDetail() {
 
   // Entry and Exit Price (side-by-side)
   const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
-  const entryPriceRow = createAttributeRowHTML('Entry Price', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
   
   const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
-  const exitPriceRow = createAttributeRowHTML('Exit Price', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
 
   const pricePair = document.createElement('div');
   pricePair.className = 'attribute-row-pair';
@@ -4153,7 +4174,7 @@ function renderMobileDetail() {
 
   // Quantity and Charges (side-by-side)
   const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
-  const quantityRow = createAttributeRowHTML('Quantity', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
   
   const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
   const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" onchange="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
@@ -4222,48 +4243,73 @@ function renderMobileStats() {
     const bullishCounts = {};
     const bearishCounts = {};
 
+    const incrementCount = (counts, pat, status) => {
+      if (!counts[pat]) {
+        counts[pat] = { passed: 0, missed: 0, failed: 0, total: 0 };
+      }
+      counts[pat].total += 1;
+      if (status === 'PASSED') counts[pat].passed += 1;
+      else if (status === 'FAILED') counts[pat].failed += 1;
+      else counts[pat].missed += 1;
+    };
+
     entries.forEach(entry => {
+      const status = entry.status || 'MISSED';
       entry.patterns.forEach(pat => {
         const tagObj = tags.find(t => t.name === pat);
         const tagType = tagObj ? tagObj.type : 'Both';
         
         if (tagType === 'Bullish') {
-          bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
+          incrementCount(bullishCounts, pat, status);
         } else if (tagType === 'Bearish') {
-          bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+          incrementCount(bearishCounts, pat, status);
         } else {
-          if (entry.bias === 'Bullish') bullishCounts[pat] = (bullishCounts[pat] || 0) + 1;
-          else if (entry.bias === 'Bearish') bearishCounts[pat] = (bearishCounts[pat] || 0) + 1;
+          if (entry.bias === 'Bullish') {
+            incrementCount(bullishCounts, pat, status);
+          } else if (entry.bias === 'Bearish') {
+            incrementCount(bearishCounts, pat, status);
+          } else {
+            incrementCount(bullishCounts, pat, status);
+            incrementCount(bearishCounts, pat, status);
+          }
         }
       });
     });
 
-    const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1] - a[1]);
-    const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1] - a[1]);
+    const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1].total - a[1].total);
+    const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1].total - a[1].total);
 
     let bullHtml = '';
-    sortedBullish.forEach(([name, count], index) => {
+    sortedBullish.forEach(([name, stats], index) => {
       bullHtml += `
         <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
           <div class="stats-rank-label">
             <span class="stats-rank-number">${index + 1}.</span>
             <span>${name}</span>
           </div>
-          <span class="stats-rank-badge" style="font-size:9px; padding:1px 6px;">${count}</span>
+          <div class="stats-rank-badge-group" style="display: flex; gap: 4px;">
+            <span class="stats-rank-badge" style="background-color: rgba(162, 224, 72, 0.15); color: var(--color-bull); border: 1px solid rgba(162, 224, 72, 0.3); font-size: 9px; padding: 1px 6px;">${stats.passed}P</span>
+            <span class="stats-rank-badge" style="background-color: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3); font-size: 9px; padding: 1px 6px;">${stats.missed}M</span>
+            <span class="stats-rank-badge" style="background-color: rgba(255, 94, 94, 0.15); color: var(--color-bear); border: 1px solid rgba(255, 94, 94, 0.3); font-size: 9px; padding: 1px 6px;">${stats.failed}F</span>
+          </div>
         </div>
       `;
     });
     if (sortedBullish.length === 0) bullHtml = '<div style="color:var(--text-muted); font-size:11px; padding:6px;">No bullish patterns.</div>';
 
     let bearHtml = '';
-    sortedBearish.forEach(([name, count], index) => {
+    sortedBearish.forEach(([name, stats], index) => {
       bearHtml += `
         <div class="stats-rank-item" style="padding:6px 10px; font-size:11px;" onclick="openPatternSubGallery('${name}')">
           <div class="stats-rank-label">
             <span class="stats-rank-number">${index + 1}.</span>
             <span>${name}</span>
           </div>
-          <span class="stats-rank-badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--color-bear); font-size:9px; padding:1px 6px;">${count}</span>
+          <div class="stats-rank-badge-group" style="display: flex; gap: 4px;">
+            <span class="stats-rank-badge" style="background-color: rgba(162, 224, 72, 0.15); color: var(--color-bull); border: 1px solid rgba(162, 224, 72, 0.3); font-size: 9px; padding: 1px 6px;">${stats.passed}P</span>
+            <span class="stats-rank-badge" style="background-color: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3); font-size: 9px; padding: 1px 6px;">${stats.missed}M</span>
+            <span class="stats-rank-badge" style="background-color: rgba(255, 94, 94, 0.15); color: var(--color-bear); border: 1px solid rgba(255, 94, 94, 0.3); font-size: 9px; padding: 1px 6px;">${stats.failed}F</span>
+          </div>
         </div>
       `;
     });
