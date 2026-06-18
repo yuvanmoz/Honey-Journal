@@ -2146,6 +2146,8 @@ function generatePLTimelineTableHTML(stats, period) {
   }
 
   const sortedKeys = Object.keys(dataObj).sort().reverse();
+  const values = Object.values(dataObj);
+  const maxPl = values.length > 0 ? Math.max(...values.map(Math.abs)) : 1;
 
   let html = `
     <table class="pnl-timeline-table">
@@ -2165,12 +2167,22 @@ function generatePLTimelineTableHTML(stats, period) {
     sortedKeys.forEach(key => {
       const pl = dataObj[key];
       const count = tradeCounts[key] || 0;
+      const pct = maxPl > 0 ? (Math.abs(pl) / maxPl * 100) : 0;
       const rowClass = pl >= 0 ? 'pnl-row-profit' : 'pnl-row-loss';
+      const barColor = pl >= 0 ? 'var(--color-bull)' : 'var(--color-bear)';
+      
       html += `
         <tr class="${rowClass}">
           <td style="font-weight:600;">${key}</td>
           <td>${count} trades</td>
-          <td style="text-align:right; font-weight:700;">₹${pl >= 0 ? '+' : ''}${pl.toLocaleString()}</td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex; flex-direction:column; align-items:flex-end; gap:3px;">
+              <span style="font-weight:700;">₹${pl >= 0 ? '+' : ''}${pl.toLocaleString()}</span>
+              <div style="width:60px; height:3px; background:rgba(255,255,255,0.06); border-radius:2.5px; overflow:hidden;">
+                <div style="width:${pct}%; height:100%; background:${barColor};"></div>
+              </div>
+            </div>
+          </td>
         </tr>
       `;
     });
@@ -2395,30 +2407,36 @@ function renderJournalStatsTab(isMobile = false) {
   
   const activityHtml = `
     <div class="stats-section-title">Trade Activity</div>
-    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 2 : 4}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Total Entries</div>
-        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.totalEntries}</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">All setups logged</div>
+    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Trade Execution Ratio</div>
+          <div style="font-size:13px; font-weight:700; color:var(--text-main);">${stats.executedCount} / ${stats.totalEntries} <span style="font-size:10px; color:var(--text-muted); font-weight:500;">Executed</span></div>
+        </div>
+        <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; display:flex;">
+          <div style="width:${(stats.executedCount / stats.totalEntries * 100) || 0}%; background:var(--color-both); border-radius:4px 0 0 4px;" title="Executed: ${stats.executedCount}"></div>
+          <div style="width:${(stats.missedCount / stats.totalEntries * 100) || 0}%; background:var(--accent-gold); border-radius:0 4px 4px 0;" title="Missed: ${stats.missedCount}"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:500;">
+          <span><i class="fa-solid fa-circle" style="color:var(--color-both); font-size:7px; margin-right:3px;"></i> Executed (${stats.executedCount})</span>
+          <span><i class="fa-solid fa-circle" style="color:var(--accent-gold); font-size:7px; margin-right:3px;"></i> Missed (${stats.missedCount})</span>
+        </div>
       </div>
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Executed Trades</div>
-        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.executedCount}</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">PASSED or FAILED</div>
+      
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Trading Days Activity</div>
+          <div style="font-size:13px; font-weight:700; color:var(--text-main);">${stats.tradingDays} / ${stats.tradingDays + stats.noTradeDays} <span style="font-size:10px; color:var(--text-muted); font-weight:500;">Active</span></div>
+        </div>
+        <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; display:flex;">
+          <div style="width:${(stats.tradingDays / (stats.tradingDays + stats.noTradeDays) * 100) || 0}%; background:var(--color-bull); border-radius:4px 0 0 4px;" title="Active Days: ${stats.tradingDays}"></div>
+          <div style="width:${(stats.noTradeDays / (stats.tradingDays + stats.noTradeDays) * 100) || 0}%; background:rgba(255,255,255,0.15); border-radius:0 4px 4px 0;" title="No-Trade Days: ${stats.noTradeDays}"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:500;">
+          <span><i class="fa-solid fa-circle" style="color:var(--color-bull); font-size:7px; margin-right:3px;"></i> Active Days (${stats.tradingDays})</span>
+          <span><i class="fa-solid fa-circle" style="color:rgba(255,255,255,0.3); font-size:7px; margin-right:3px;"></i> No-Trade Days (${stats.noTradeDays})</span>
+        </div>
       </div>
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Missed Setups</div>
-        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.missedCount}</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Marked as MISSED</div>
-      </div>
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Trading Days</div>
-        <div class="apple-metric-value" style="font-size:${isMobile ? '20px' : '24px'};">${stats.tradingDays}</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Days with execution</div>
-      </div>
-    </div>
-    <div style="margin-top:10px; font-size:11px; color:var(--text-muted); font-weight:500;">
-      No-trade calendar days (weekdays with no execution): <strong>${stats.noTradeDays} days</strong>
     </div>
   `;
 
@@ -2426,25 +2444,59 @@ function renderJournalStatsTab(isMobile = false) {
   const metricsHtml = `
     <div class="stats-section-title">Performance Metrics</div>
     <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 2 : 4}, 1fr); gap: ${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '12px' : '20px'};">
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Net P&L</div>
-        <div class="apple-metric-value ${pnlClass}" style="font-size:${isMobile ? '20px' : '24px'};">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Gross: ₹+${stats.grossProfit.toLocaleString()} / ₹-${Math.abs(stats.grossLoss).toLocaleString()}</div>
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div class="apple-metric-label" style="font-size:12px; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+          <span>Net P&L</span>
+          <i class="fa-solid ${stats.netPL >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}" style="color:${stats.netPL >= 0 ? 'var(--color-bull)' : 'var(--color-bear)'}; font-size:14px;"></i>
+        </div>
+        <div class="apple-metric-value ${pnlClass}" style="font-size:22px; font-weight:800; margin: 4px 0;">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</div>
+        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted);">
+          Gross: <span style="color:var(--color-bull);">+₹${stats.grossProfit.toLocaleString()}</span> / <span style="color:var(--color-bear);">-₹${Math.abs(stats.grossLoss).toLocaleString()}</span>
+        </div>
       </div>
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Win Rate</div>
-        <div class="apple-metric-value win" style="font-size:${isMobile ? '20px' : '24px'};">${stats.winRate.toFixed(1)}%</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Based on executed trades</div>
+      
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Win Rate</div>
+          <div class="win" style="font-size:15px; font-weight:800; color:var(--color-bull);">${stats.winRate.toFixed(1)}%</div>
+        </div>
+        <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; display:flex; margin: 6px 0;">
+          <div style="width:${stats.winRate}%; background:var(--color-bull); border-radius:3px 0 0 3px;"></div>
+          <div style="width:${100 - stats.winRate}%; background:var(--color-bear); border-radius:0 3px 3px 0;"></div>
+        </div>
+        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted); text-align:right;">
+          ${stats.winRate.toFixed(0)}% wins of ${stats.executedCount} trades
+        </div>
       </div>
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Profit Days</div>
-        <div class="apple-metric-value bull" style="font-size:${isMobile ? '20px' : '24px'};">${stats.winDaysCount} days</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Days with positive Net P&L</div>
+      
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Profit vs Losing Days</div>
+          <div style="font-size:14px; font-weight:800; color:var(--text-main);">${stats.winDaysCount}W - ${stats.lossDaysCount}L</div>
+        </div>
+        <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; display:flex; margin: 6px 0;">
+          <div style="width:${(stats.winDaysCount / (stats.winDaysCount + stats.lossDaysCount) * 100) || 0}%; background:var(--color-bull); border-radius:3px 0 0 3px;"></div>
+          <div style="width:${(stats.lossDaysCount / (stats.winDaysCount + stats.lossDaysCount) * 100) || 0}%; background:var(--color-bear); border-radius:0 3px 3px 0;"></div>
+        </div>
+        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between;">
+          <span style="color:var(--color-bull); font-weight:600;">${stats.winDaysCount} Green</span>
+          <span style="color:var(--color-bear); font-weight:600;">${stats.lossDaysCount} Red</span>
+        </div>
       </div>
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '20px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:${isMobile ? '11px' : '12px'};">Losing Days</div>
-        <div class="apple-metric-value bear" style="font-size:${isMobile ? '20px' : '24px'};">${stats.lossDaysCount} days</div>
-        <div class="apple-metric-sub" style="font-size:${isMobile ? '9px' : '11px'};">Days with negative Net P&L</div>
+
+      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Avg Win/Loss Ratio</div>
+          <div style="font-size:15px; font-weight:800; color:var(--text-main);">${stats.avgLossDay !== 0 ? (stats.avgWinDay / Math.abs(stats.avgLossDay)).toFixed(2) : 'N/A'}</div>
+        </div>
+        <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; display:flex; margin: 6px 0;">
+          <div style="width:${(stats.avgWinDay / (stats.avgWinDay + Math.abs(stats.avgLossDay)) * 100) || 0}%; background:var(--color-bull); border-radius:3px 0 0 3px;"></div>
+          <div style="width:${(Math.abs(stats.avgLossDay) / (stats.avgWinDay + Math.abs(stats.avgLossDay)) * 100) || 0}%; background:var(--color-bear); border-radius:0 3px 3px 0;"></div>
+        </div>
+        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between;">
+          <span>Avg Win: +₹${stats.avgWinDay.toFixed(0)}</span>
+          <span>Avg Loss: -₹${Math.abs(stats.avgLossDay).toFixed(0)}</span>
+        </div>
       </div>
     </div>
     <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
@@ -2504,7 +2556,14 @@ function renderJournalStatsTab(isMobile = false) {
         <td style="font-weight:600; color:var(--text-main);">${p.name}</td>
         <td class="${p.totalPL >= 0 ? 'bull' : 'bear'}" style="font-weight:700; text-align:right;">₹${p.totalPL >= 0 ? '+' : ''}${p.totalPL.toLocaleString()}</td>
         <td style="text-align:right; color:var(--text-secondary);">${p.count} trades</td>
-        <td style="text-align:right; font-weight:600; color:var(--color-bull);">${p.winRate.toFixed(1)}%</td>
+        <td style="text-align:right;">
+          <div style="display:inline-flex; flex-direction:column; align-items:flex-end; gap:3px;">
+            <span style="font-weight:600; color:var(--color-bull);">${p.winRate.toFixed(1)}%</span>
+            <div style="width:40px; height:3px; background:rgba(255,255,255,0.06); border-radius:1.5px; overflow:hidden;">
+              <div style="width:${p.winRate}%; height:100%; background:var(--color-bull);"></div>
+            </div>
+          </div>
+        </td>
       </tr>
     `;
   });
@@ -2590,17 +2649,26 @@ function renderJournalStatsTab(isMobile = false) {
     if (val > bestDowVal) { bestDowVal = val; bestDow = i; }
     if (val < worstDowVal) { worstDowVal = val; worstDow = i; }
   }
+  const maxDowVal = Math.max(...[1,2,3,4,5].map(i => Math.abs(stats.byDayOfWeek[i] || 0))) || 1;
 
   for (let i = 1; i <= 5; i++) {
     const val = stats.byDayOfWeek[i] || 0;
     const count = stats.dayOfWeekTradeCount[i] || 0;
-    const highlightClass = i === bestDow ? 'bull' : (i === worstDow ? 'bear' : '');
+    const highlightClass = val >= 0 ? 'bull' : 'bear';
+    const pct = maxDowVal > 0 ? (Math.abs(val) / maxDowVal * 100) : 0;
+    const barColor = val >= 0 ? 'var(--color-bull)' : 'var(--color-bear)';
+    
     dowRows += `
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-        <span style="font-weight:600; color:var(--text-secondary);">${daysOfWeek[i]}</span>
-        <div style="text-align:right;">
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <span style="font-weight:600; color:var(--text-secondary);">${daysOfWeek[i]}</span>
+          <span style="font-size:10px; color:var(--text-muted);">${count} trades</span>
+        </div>
+        <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:3px;">
           <span class="${highlightClass}" style="font-weight:700;">₹${val >= 0 ? '+' : ''}${val.toLocaleString()}</span>
-          <div style="font-size:10px; color:var(--text-muted);">${count} trades</div>
+          <div style="width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:1.5px; overflow:hidden;">
+            <div style="width:${pct}%; height:100%; background:${barColor};"></div>
+          </div>
         </div>
       </div>
     `;
@@ -2608,15 +2676,26 @@ function renderJournalStatsTab(isMobile = false) {
 
   let monthlyTrendRows = '';
   const sortedMonths = Object.keys(stats.byMonth).sort();
+  const maxMonthVal = sortedMonths.length > 0 ? Math.max(...sortedMonths.map(m => Math.abs(stats.byMonth[m]))) : 1;
+  
   sortedMonths.forEach(m => {
     const val = stats.byMonth[m];
     const count = stats.monthTradeCount[m] || 0;
+    const highlightClass = val >= 0 ? 'bull' : 'bear';
+    const pct = maxMonthVal > 0 ? (Math.abs(val) / maxMonthVal * 100) : 0;
+    const barColor = val >= 0 ? 'var(--color-bull)' : 'var(--color-bear)';
+    
     monthlyTrendRows += `
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-        <span style="font-weight:600; color:var(--text-secondary);">${m}</span>
-        <div style="text-align:right;">
-          <span class="${val >= 0 ? 'bull' : 'bear'}" style="font-weight:700;">₹${val >= 0 ? '+' : ''}${val.toLocaleString()}</span>
-          <div style="font-size:10px; color:var(--text-muted);">${count} trades</div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <span style="font-weight:600; color:var(--text-secondary);">${m}</span>
+          <span style="font-size:10px; color:var(--text-muted);">${count} trades</span>
+        </div>
+        <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:3px;">
+          <span class="${highlightClass}" style="font-weight:700;">₹${val >= 0 ? '+' : ''}${val.toLocaleString()}</span>
+          <div style="width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:1.5px; overflow:hidden;">
+            <div style="width:${pct}%; height:100%; background:${barColor};"></div>
+          </div>
         </div>
       </div>
     `;
