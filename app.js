@@ -122,9 +122,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Auto-save on page refresh/unload
   window.addEventListener('beforeunload', () => {
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
+    saveFromDOM(false);
     discardEmptyEntryIfNecessary();
     localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
     localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
@@ -774,7 +772,7 @@ function discardEmptyEntryIfNecessary() {
   const entryIndex = entries.findIndex(e => e.id === activeEntryId);
   if (entryIndex !== -1) {
     const entry = entries[entryIndex];
-    if (isEntryEmpty(entry)) {
+    if (!entry._touched && isEntryEmpty(entry)) {
       entries.splice(entryIndex, 1);
       saveDatabase(null, true, true); // Immediate save of clean DB
     }
@@ -3078,15 +3076,13 @@ function openEntryDetail(id) {
 }
 
 function closeDesktopDetail() {
-  if (document.activeElement && typeof document.activeElement.blur === 'function') {
-    document.activeElement.blur();
-  }
+  saveFromDOM(false);
   setTimeout(() => {
     discardEmptyEntryIfNecessary();
     document.getElementById('desktop-detail-pane').classList.add('closed');
     activeEntryId = null;
     renderAll();
-  }, 100);
+  }, 150);
 }
 
 function renderDesktopDetail() {
@@ -3173,10 +3169,10 @@ function renderDesktopDetail() {
 
   // Entry and Exit Price (side-by-side)
   const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
-  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
   
   const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
-  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
 
   const pricePair = document.createElement('div');
   pricePair.className = 'attribute-row-pair';
@@ -3186,10 +3182,10 @@ function renderDesktopDetail() {
 
   // Quantity and Charges (side-by-side)
   const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
-  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" oninput="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
   
   const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
-  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" onchange="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
+  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" oninput="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
 
   const qtyChargesPair = document.createElement('div');
   qtyChargesPair.className = 'attribute-row-pair';
@@ -3204,7 +3200,7 @@ function renderDesktopDetail() {
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
     
     if (attr.name === 'Market') {
-      inputHTML = `<input type="text" list="market-datalist" class="input-text" value="${currentVal}" onchange="saveCustomAttribute('Market', this.value)">
+      inputHTML = `<input type="text" list="market-datalist" class="input-text" value="${currentVal}" oninput="saveCustomAttribute('Market', this.value)">
         <datalist id="market-datalist">
           <option value="Nifty 50">
           <option value="Bank Nifty">
@@ -3214,7 +3210,7 @@ function renderDesktopDetail() {
         </datalist>`;
     } else if (attr.name === 'P&L') {
       // P&L is always numeric
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('P&L', Number(this.value))">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('P&L', Number(this.value))">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
@@ -3222,9 +3218,9 @@ function renderDesktopDetail() {
       });
       inputHTML = `<select class="input-select" onchange="saveCustomAttribute('${attr.name}', this.value)">${optionsHtml}</select>`;
     } else if (attr.type === 'number') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('${attr.name}', Number(this.value))">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('${attr.name}', Number(this.value))">`;
     } else {
-      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" oninput="saveCustomAttribute('${attr.name}', this.value)">`;
     }
 
     const isSystemAttribute = (attr.name === 'Market' || attr.name === 'P&L');
@@ -3557,6 +3553,7 @@ function togglePatternTag(tagName) {
   } else {
     entry.patterns.push(tagName);
   }
+  entry._touched = true;
 
   saveDatabase(entry, false, true); // Immediate save
   renderDetailOnly();
@@ -3567,6 +3564,7 @@ function saveCurrentField(field, val) {
   if (!entry) return;
 
   entry[field] = val;
+  entry._touched = true;
   entry.updatedAt = new Date().toISOString();
   
   const immediate = (field !== 'notes' && field !== 'mistakes');
@@ -3581,6 +3579,7 @@ function saveCustomAttribute(attrName, val) {
   if (!entry) return;
 
   entry.customAttributes[attrName] = val;
+  entry._touched = true;
   if (attrName === 'P&L') {
     updateEntryStatus(entry);
   }
@@ -3601,6 +3600,7 @@ function saveCalculateAttribute(attrName, valStr) {
 
   const val = valStr === '' ? '' : Number(valStr);
   entry.customAttributes[attrName] = val;
+  entry._touched = true;
 
   // Check if all 4 are filled
   const ep = entry.customAttributes['Entry Price'];
@@ -3627,6 +3627,128 @@ function saveCalculateAttribute(attrName, valStr) {
   entry.updatedAt = new Date().toISOString();
   saveDatabase(entry, false, true);
   renderDetailOnly();
+}
+
+// Save active entry data directly from DOM values (used on close, blur, or manual save)
+function saveFromDOM(isManualClick = false) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return Promise.resolve();
+
+  // Determine active view/platform
+  const desktopPane = document.getElementById('desktop-detail-pane');
+  const isDesktop = desktopPane && !desktopPane.classList.contains('closed');
+  const mobilePane = document.getElementById('mobile-detail-pane');
+  const isMobile = mobilePane && mobilePane.classList.contains('open');
+
+  let hasData = false;
+
+  if (isDesktop) {
+    const notesEl = document.getElementById('detail-notes');
+    if (notesEl) {
+      entry.notes = notesEl.value;
+      if (notesEl.value.trim() !== '') hasData = true;
+    }
+    const mistakesEl = document.getElementById('detail-mistakes');
+    if (mistakesEl) {
+      entry.mistakes = mistakesEl.value;
+      if (mistakesEl.value.trim() !== '') hasData = true;
+    }
+
+    const attrRows = document.querySelectorAll('#detail-attributes-list .attribute-row');
+    attrRows.forEach(row => {
+      const labelEl = row.querySelector('.attribute-label span');
+      if (!labelEl) return;
+      const label = labelEl.textContent.trim();
+      const inputEl = row.querySelector('input, select');
+      if (!inputEl) return;
+      
+      let attrKey = label;
+      if (label === 'Entry') attrKey = 'Entry Price';
+      else if (label === 'Exit') attrKey = 'Exit Price';
+      else if (label === 'Qty') attrKey = 'Quantity';
+      
+      let val = inputEl.value;
+      if (inputEl.type === 'number') {
+        val = val === '' ? '' : Number(val);
+      }
+      entry.customAttributes[attrKey] = val;
+      if (val !== undefined && val !== null && val !== '') {
+        hasData = true;
+      }
+    });
+  } else if (isMobile) {
+    const notesEl = document.getElementById('mobile-detail-notes');
+    if (notesEl) {
+      entry.notes = notesEl.value;
+      if (notesEl.value.trim() !== '') hasData = true;
+    }
+    const mistakesEl = document.getElementById('mobile-detail-mistakes');
+    if (mistakesEl) {
+      entry.mistakes = mistakesEl.value;
+      if (mistakesEl.value.trim() !== '') hasData = true;
+    }
+
+    const attrRows = document.querySelectorAll('#mobile-detail-attributes-list .attribute-row');
+    attrRows.forEach(row => {
+      const labelEl = row.querySelector('.attribute-label span');
+      if (!labelEl) return;
+      const label = labelEl.textContent.trim();
+      const inputEl = row.querySelector('input, select');
+      if (!inputEl) return;
+      
+      let attrKey = label;
+      if (label === 'Entry') attrKey = 'Entry Price';
+      else if (label === 'Exit') attrKey = 'Exit Price';
+      else if (label === 'Qty') attrKey = 'Quantity';
+      
+      let val = inputEl.value;
+      if (inputEl.type === 'number') {
+        val = val === '' ? '' : Number(val);
+      }
+      entry.customAttributes[attrKey] = val;
+      if (val !== undefined && val !== null && val !== '') {
+        hasData = true;
+      }
+    });
+  }
+
+  // Recalculate P&L if all 4 are filled
+  const ep = entry.customAttributes['Entry Price'];
+  const xp = entry.customAttributes['Exit Price'];
+  const qty = entry.customAttributes['Quantity'];
+  const chg = entry.customAttributes['Charges'];
+
+  if (ep !== '' && ep !== undefined && ep !== null &&
+      xp !== '' && xp !== undefined && xp !== null &&
+      qty !== '' && qty !== undefined && qty !== null &&
+      chg !== '' && chg !== undefined && chg !== null) {
+    const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
+    entry.customAttributes['P&L'] = computedPL;
+    hasData = true;
+  }
+
+  // Recalculate status
+  updateEntryStatus(entry);
+
+  if (hasData || isManualClick || (entry.patterns && entry.patterns.length > 0) || (entry.images && entry.images.length > 0)) {
+    entry._touched = true;
+  }
+
+  entry.updatedAt = new Date().toISOString();
+
+  // Save synchronously to localStorage
+  localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+  localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+  localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+
+  return saveDatabase(entry, false, true);
+}
+
+// Manual Save button trigger
+function manualSave() {
+  saveFromDOM(true).then(() => {
+    showToast('Saved!', 'success');
+  });
 }
 
 // Dialog boxes (custom attribute popup UI)
@@ -3929,7 +4051,8 @@ function createNewEntry() {
     customAttributes: {},
     bookmarked: false,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    _touched: false
   };
 
   // Populate custom fields defaults
@@ -4206,16 +4329,14 @@ function renderMobileGallery(list) {
 
 // Mobile Details close arrow trigger
 function closeMobileDetail() {
-  if (document.activeElement && typeof document.activeElement.blur === 'function') {
-    document.activeElement.blur();
-  }
+  saveFromDOM(false);
   setTimeout(() => {
     discardEmptyEntryIfNecessary();
     const mobileDetail = document.getElementById('mobile-detail-pane');
     if (mobileDetail) mobileDetail.classList.remove('open');
     activeEntryId = null;
     renderAll();
-  }, 100);
+  }, 150);
 }
 
 function renderMobileDetail() {
@@ -4306,10 +4427,10 @@ function renderMobileDetail() {
 
   // Entry and Exit Price (side-by-side)
   const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
-  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
   
   const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
-  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" onchange="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
 
   const pricePair = document.createElement('div');
   pricePair.className = 'attribute-row-pair';
@@ -4319,10 +4440,10 @@ function renderMobileDetail() {
 
   // Quantity and Charges (side-by-side)
   const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
-  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" onchange="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" oninput="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
   
   const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
-  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" onchange="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
+  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" oninput="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
 
   const qtyChargesPair = document.createElement('div');
   qtyChargesPair.className = 'attribute-row-pair';
@@ -4337,7 +4458,7 @@ function renderMobileDetail() {
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
     
     if (attr.name === 'Market') {
-      inputHTML = `<input type="text" list="market-datalist-mob" class="input-text" value="${currentVal}" onchange="saveCustomAttribute('Market', this.value)">
+      inputHTML = `<input type="text" list="market-datalist-mob" class="input-text" value="${currentVal}" oninput="saveCustomAttribute('Market', this.value)">
         <datalist id="market-datalist-mob">
           <option value="Nifty 50">
           <option value="Bank Nifty">
@@ -4346,7 +4467,7 @@ function renderMobileDetail() {
           <option value="Crude Oil">
         </datalist>`;
     } else if (attr.name === 'P&L') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('P&L', Number(this.value))">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('P&L', Number(this.value))">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
@@ -4354,9 +4475,9 @@ function renderMobileDetail() {
       });
       inputHTML = `<select class="input-select" onchange="saveCustomAttribute('${attr.name}', this.value)">${optionsHtml}</select>`;
     } else if (attr.type === 'number') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" onchange="saveCustomAttribute('${attr.name}', Number(this.value))">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('${attr.name}', Number(this.value))">`;
     } else {
-      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" onchange="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" oninput="saveCustomAttribute('${attr.name}', this.value)">`;
     }
 
     const isSystemAttribute = (attr.name === 'Market' || attr.name === 'P&L');

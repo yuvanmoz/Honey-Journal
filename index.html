@@ -185,6 +185,9 @@
         <div class="detail-header">
           <div style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Setup Details</div>
           <div class="detail-actions-right">
+            <button class="btn-icon" id="desktop-save-btn" onclick="manualSave()" title="Save Entry" style="color: var(--accent-olive); padding: 6px;">
+              <i class="fa-solid fa-floppy-disk"></i>
+            </button>
             <button class="btn-icon" style="color: var(--color-bear); padding: 6px;" onclick="deleteActiveEntry()" title="Delete Entry"><i class="fa-solid fa-trash-can"></i></button>
             <button class="btn-icon" style="padding: 6px;" onclick="closeDesktopDetail()" title="Close Panel"><i class="fa-solid fa-xmark"></i></button>
           </div>
@@ -370,6 +373,7 @@
             <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
             <div class="phone-detail-title" id="mobile-detail-title-header">Setup Details</div>
             <div style="display: flex; gap: 14px; align-items: center;">
+              <i class="fa-solid fa-floppy-disk" id="mobile-save-btn" style="color: var(--accent-olive); cursor: pointer;" onclick="manualSave()" title="Save Entry"></i>
               <i class="fa-solid fa-trash-can" style="color: var(--color-bear); cursor: pointer;" onclick="deleteActiveEntry()"></i>
               <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
             </div>
