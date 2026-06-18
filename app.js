@@ -114,9 +114,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('beforeunload', () => {
     // Discard any unsaved entries from memory so they don't persist
     entries = entries.filter(e => e._saved);
-    localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-    localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-    localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+    try {
+      localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+      localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+      localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+    } catch (e) {
+      // Quota exceeded on unload — not critical, disk is the source of truth
+      console.warn('localStorage write on unload failed:', e);
+    }
   });
 
   // Wheel scroll zoom for desktop repositioning
@@ -765,10 +770,25 @@ let saveTimeout = null;
 const entriesToSave = new Set();
 
 async function saveDatabase(specificEntry = null, saveAll = false, immediate = false) {
-  // Always write to localStorage as a backup cache
-  localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-  localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-  localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+  // Write to localStorage as a backup cache.
+  // Wrapped in try/catch because large base64 images can exceed the ~5MB
+  // WebView localStorage quota and throw QuotaExceededError — we must NOT
+  // let that crash the function before reaching the Tauri disk write below.
+  try {
+    localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+    localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+    localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+  } catch (e) {
+    // Quota exceeded — strip images from cache copy only (disk copy keeps them)
+    try {
+      const slim = entries.map(e => { const c = Object.assign({}, e); c.images = []; return c; });
+      localStorage.setItem('honey_journal_entries', JSON.stringify(slim));
+      localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+      localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+    } catch (e2) {
+      console.warn('localStorage full even after image strip — skipping cache write:', e2);
+    }
+  }
 
   // Update revert checkpoint if the active entry is being saved
   if (activeEntryId) {
@@ -784,15 +804,20 @@ async function saveDatabase(specificEntry = null, saveAll = false, immediate = f
     else if (activeEntryId) entriesToSave.add(activeEntryId);
 
     const performSave = async () => {
-      await saveTagsToDisk();
-      await saveAttributesToDisk();
-      const promises = [];
-      for (const id of entriesToSave) {
-        const entry = entries.find(e => e.id === id);
-        if (entry) promises.push(saveEntryToDisk(entry));
+      try {
+        await saveTagsToDisk();
+        await saveAttributesToDisk();
+        const promises = [];
+        for (const id of entriesToSave) {
+          const entry = entries.find(e => e.id === id);
+          if (entry) promises.push(saveEntryToDisk(entry));
+        }
+        await Promise.all(promises);
+        entriesToSave.clear();
+      } catch (diskErr) {
+        console.error('Disk write failed:', diskErr);
+        showToast('Save failed: ' + diskErr, 'error');
       }
-      await Promise.all(promises);
-      entriesToSave.clear();
     };
 
     if (saveTimeout) clearTimeout(saveTimeout);
@@ -3817,10 +3842,14 @@ function saveFromDOM(isManualClick = false) {
 
   entry.updatedAt = new Date().toISOString();
 
-  // Save synchronously to localStorage
-  localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-  localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-  localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+  // Save synchronously to localStorage (guarded — images may exceed quota)
+  try {
+    localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
+    localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
+    localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+  } catch (e) {
+    console.warn('localStorage write in saveFromDOM failed (quota):', e);
+  }
 
   return saveDatabase(entry, false, true);
 }
