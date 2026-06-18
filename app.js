@@ -18,6 +18,7 @@ let customAttributes = [];
 let activeEntryId = null;
 let activeCalendarDate = null; // Filter setups by calendar date if set
 let storagePath = null;        // Sync/storage folder path on local disk
+let originalEntryState = null; // Revert checkpoint for unsaved edits in existing setups
 
 let activeImageIndex = 0;
 let activePatternSubGallery = null;
@@ -107,23 +108,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 
 
-  // Bind blur listener for instant saving on focus loss
-  const blurSave = () => {
-    const entry = entries.find(e => e.id === activeEntryId);
-    if (entry) {
-      saveDatabase(entry, false, true); // Save immediately on focus out
-    }
-  };
-  
-  document.getElementById('detail-notes')?.addEventListener('blur', blurSave);
-  document.getElementById('detail-mistakes')?.addEventListener('blur', blurSave);
-  document.getElementById('mobile-detail-notes')?.addEventListener('blur', blurSave);
-  document.getElementById('mobile-detail-mistakes')?.addEventListener('blur', blurSave);
+  // No blur save bindings needed for pure manual save model
 
   // Auto-save on page refresh/unload
   window.addEventListener('beforeunload', () => {
-    saveFromDOM(false);
-    discardEmptyEntryIfNecessary();
+    // Discard any unsaved entries from memory so they don't persist
+    entries = entries.filter(e => e._saved);
     localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
     localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
     localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
@@ -685,6 +675,7 @@ async function loadDatabase() {
         entries.forEach(e => {
           if (!e.images) e.images = e.image ? [e.image] : [];
           updateEntryStatus(e);
+          e._saved = true;
         });
       } catch (err) {
         console.error('Error reading entries directory:', err);
@@ -721,6 +712,7 @@ async function loadDatabase() {
   entries.forEach(e => {
     if (!e.images) e.images = e.image ? [e.image] : [];
     updateEntryStatus(e);
+    e._saved = true;
   });
 }
 
@@ -767,17 +759,7 @@ function isEntryEmpty(entry) {
   return true;
 }
 
-function discardEmptyEntryIfNecessary() {
-  if (!activeEntryId) return;
-  const entryIndex = entries.findIndex(e => e.id === activeEntryId);
-  if (entryIndex !== -1) {
-    const entry = entries[entryIndex];
-    if (!entry._touched && isEntryEmpty(entry)) {
-      entries.splice(entryIndex, 1);
-      saveDatabase(null, true, true); // Immediate save of clean DB
-    }
-  }
-}
+// discardEmptyEntryIfNecessary removed in favor of manual save _saved flag logic
 
 let saveTimeout = null;
 const entriesToSave = new Set();
@@ -787,6 +769,14 @@ async function saveDatabase(specificEntry = null, saveAll = false, immediate = f
   localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
   localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
   localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+
+  // Update revert checkpoint if the active entry is being saved
+  if (activeEntryId) {
+    const activeEntry = entries.find(e => e.id === activeEntryId);
+    if (activeEntry && activeEntry._saved) {
+      originalEntryState = JSON.parse(JSON.stringify(activeEntry));
+    }
+  }
 
   if (window.__TAURI__ && storagePath) {
     if (saveAll)          entries.forEach(e => entriesToSave.add(e.id));
@@ -3061,9 +3051,32 @@ function renderDesktopSettings() {
 
 // Notion Detail Draw Panel (Desktop)
 function openEntryDetail(id) {
-  discardEmptyEntryIfNecessary();
+  // Revert or discard currently active entry before loading the new one
+  if (activeEntryId && activeEntryId !== id) {
+    const prevEntry = entries.find(e => e.id === activeEntryId);
+    if (prevEntry) {
+      if (!prevEntry._saved) {
+        discardUnsavedNewEntry(prevEntry.id);
+      } else if (originalEntryState && originalEntryState.id === prevEntry.id) {
+        // Revert in-memory edits to the original loaded state
+        const idx = entries.findIndex(e => e.id === prevEntry.id);
+        if (idx !== -1) {
+          entries[idx] = JSON.parse(JSON.stringify(originalEntryState));
+        }
+      }
+    }
+  }
+
   activeEntryId = id;
   activeImageIndex = 0; // Reset active image viewer to the first image
+
+  // Save checkpoint for the newly opened entry
+  const entry = entries.find(e => e.id === id);
+  if (entry) {
+    originalEntryState = JSON.parse(JSON.stringify(entry));
+  } else {
+    originalEntryState = null;
+  }
   
   // Show Panel
   document.getElementById('desktop-detail-pane').classList.remove('closed');
@@ -3076,13 +3089,22 @@ function openEntryDetail(id) {
 }
 
 function closeDesktopDetail() {
-  saveFromDOM(false);
-  setTimeout(() => {
-    discardEmptyEntryIfNecessary();
-    document.getElementById('desktop-detail-pane').classList.add('closed');
-    activeEntryId = null;
-    renderAll();
-  }, 150);
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (entry) {
+    if (!entry._saved) {
+      discardUnsavedNewEntry(entry.id);
+    } else if (originalEntryState && originalEntryState.id === entry.id) {
+      // Revert in-memory edits to original state
+      const idx = entries.findIndex(e => e.id === entry.id);
+      if (idx !== -1) {
+        entries[idx] = JSON.parse(JSON.stringify(originalEntryState));
+      }
+    }
+  }
+  originalEntryState = null;
+  document.getElementById('desktop-detail-pane').classList.add('closed');
+  activeEntryId = null;
+  renderAll();
 }
 
 function renderDesktopDetail() {
@@ -3134,13 +3156,13 @@ function renderDesktopDetail() {
   // Bias - color chips instead of dropdown
   const biasChipsHTML = `
     <div class="bias-chips-container">
-      <div class="bias-chip ${entry.bias === 'Bullish' ? 'active-bull' : ''}" onclick="saveCurrentField('bias', 'Bullish'); renderAll();">
+      <div class="bias-chip ${entry.bias === 'Bullish' ? 'active-bull' : ''}" onclick="setBias('Bullish', this)">
         <span class="bias-chip-dot" style="background: var(--color-bull);"></span> Bullish
       </div>
-      <div class="bias-chip ${entry.bias === 'Bearish' ? 'active-bear' : ''}" onclick="saveCurrentField('bias', 'Bearish'); renderAll();">
+      <div class="bias-chip ${entry.bias === 'Bearish' ? 'active-bear' : ''}" onclick="setBias('Bearish', this)">
         <span class="bias-chip-dot" style="background: var(--color-bear);"></span> Bearish
       </div>
-      <div class="bias-chip ${entry.bias === 'Both' ? 'active-both' : ''}" onclick="saveCurrentField('bias', 'Both'); renderAll();">
+      <div class="bias-chip ${entry.bias === 'Both' ? 'active-both' : ''}" onclick="setBias('Both', this)">
         <span class="bias-chip-dot" style="background: var(--color-both);"></span> Both
       </div>
     </div>
@@ -3149,7 +3171,7 @@ function renderDesktopDetail() {
   attrList.appendChild(biasRow);
 
   // Date
-  const dateRow = createAttributeRowHTML('Date', `<input type="date" class="input-text" value="${entry.date}" onchange="saveCurrentField('date', this.value)">`, 'fa-solid fa-calendar');
+  const dateRow = createAttributeRowHTML('Date', `<input type="date" class="input-text" value="${entry.date}" onchange="setEntryDate(this.value)">`, 'fa-solid fa-calendar');
   attrList.appendChild(dateRow);
 
   // Patterns tags
@@ -3169,10 +3191,10 @@ function renderDesktopDetail() {
 
   // Entry and Exit Price (side-by-side)
   const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
-  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" id="desktop-input-entry" class="input-text" value="${entryPriceVal}" placeholder="Optional" oninput="updateCalculationsRealTime('desktop')">`, 'fa-solid fa-dollar-sign');
   
   const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
-  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" id="desktop-input-exit" class="input-text" value="${exitPriceVal}" placeholder="Optional" oninput="updateCalculationsRealTime('desktop')">`, 'fa-solid fa-arrow-right-to-bracket');
 
   const pricePair = document.createElement('div');
   pricePair.className = 'attribute-row-pair';
@@ -3182,10 +3204,10 @@ function renderDesktopDetail() {
 
   // Quantity and Charges (side-by-side)
   const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
-  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" oninput="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" id="desktop-input-qty" class="input-text" value="${quantityVal}" placeholder="Optional" oninput="updateCalculationsRealTime('desktop')">`, 'fa-solid fa-calculator');
   
   const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
-  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" oninput="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
+  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" id="desktop-input-charges" class="input-text" value="${chargesVal}" placeholder="Optional" oninput="updateCalculationsRealTime('desktop')">`, 'fa-solid fa-percent');
 
   const qtyChargesPair = document.createElement('div');
   qtyChargesPair.className = 'attribute-row-pair';
@@ -3200,7 +3222,7 @@ function renderDesktopDetail() {
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
     
     if (attr.name === 'Market') {
-      inputHTML = `<input type="text" list="market-datalist" class="input-text" value="${currentVal}" oninput="saveCustomAttribute('Market', this.value)">
+      inputHTML = `<input type="text" id="desktop-input-market" list="market-datalist" class="input-text" value="${currentVal}">
         <datalist id="market-datalist">
           <option value="Nifty 50">
           <option value="Bank Nifty">
@@ -3210,17 +3232,17 @@ function renderDesktopDetail() {
         </datalist>`;
     } else if (attr.name === 'P&L') {
       // P&L is always numeric
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('P&L', Number(this.value))">`;
+      inputHTML = `<input type="number" id="desktop-input-pl" class="input-text" value="${currentVal}" placeholder="0" readonly style="opacity: 0.8; cursor: not-allowed;">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
         optionsHtml += `<option value="${opt}" ${currentVal === opt ? 'selected' : ''}>${opt || 'Optional'}</option>`;
       });
-      inputHTML = `<select class="input-select" onchange="saveCustomAttribute('${attr.name}', this.value)">${optionsHtml}</select>`;
+      inputHTML = `<select class="input-select">${optionsHtml}</select>`;
     } else if (attr.type === 'number') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('${attr.name}', Number(this.value))">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0">`;
     } else {
-      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" oninput="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional">`;
     }
 
     const isSystemAttribute = (attr.name === 'Market' || attr.name === 'P&L');
@@ -3553,7 +3575,7 @@ function togglePatternTag(tagName) {
   } else {
     entry.patterns.push(tagName);
   }
-  entry._touched = true;
+  entry._saved = true;
 
   saveDatabase(entry, false, true); // Immediate save
   renderDetailOnly();
@@ -3630,9 +3652,89 @@ function saveCalculateAttribute(attrName, valStr) {
 }
 
 // Save active entry data directly from DOM values (used on close, blur, or manual save)
+// Discard unsaved new entry from database and disk
+function discardUnsavedNewEntry(entryId) {
+  const idx = entries.findIndex(e => e.id === entryId);
+  if (idx !== -1) {
+    entries.splice(idx, 1);
+  }
+  removeEntryFromDisk(entryId);
+  saveDatabase(null, true, true);
+}
+
+// Set bias in memory and toggle UI active class without full re-render
+function setBias(val, el) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return;
+  entry.bias = val;
+  
+  const container = el.closest('.bias-chips-container');
+  if (container) {
+    container.querySelectorAll('.bias-chip').forEach(c => {
+      c.classList.remove('active-bull', 'active-bear', 'active-both');
+    });
+    if (val === 'Bullish') el.classList.add('active-bull');
+    else if (val === 'Bearish') el.classList.add('active-bear');
+    else if (val === 'Both') el.classList.add('active-both');
+  }
+}
+
+// Set date in memory
+function setEntryDate(val) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (entry) {
+    entry.date = val;
+  }
+}
+
+// Real-time calculations for P&L and Status badge (DOM only, no disk write, no focus loss)
+function updateCalculationsRealTime(platform) {
+  const epEl = document.getElementById(`${platform}-input-entry`);
+  const xpEl = document.getElementById(`${platform}-input-exit`);
+  const qtyEl = document.getElementById(`${platform}-input-qty`);
+  const chgEl = document.getElementById(`${platform}-input-charges`);
+  const plEl = document.getElementById(`${platform}-input-pl`);
+  
+  if (!epEl || !xpEl || !qtyEl || !chgEl || !plEl) return;
+
+  const ep = epEl.value;
+  const xp = xpEl.value;
+  const qty = qtyEl.value;
+  const chg = chgEl.value;
+
+  const container = document.getElementById(platform === 'desktop' ? 'desktop-detail-pane' : 'mobile-detail-pane');
+
+  if (ep !== '' && xp !== '' && qty !== '' && chg !== '') {
+    const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
+    plEl.value = computedPL;
+    
+    if (container) {
+      const badge = container.querySelector('.status-passed, .status-failed, .status-missed');
+      if (badge) {
+        badge.className = 'tag-badge ' + (computedPL > 0 ? 'status-passed' : 'status-failed');
+        badge.textContent = computedPL > 0 ? 'PASSED' : 'FAILED';
+      }
+    }
+  } else {
+    plEl.value = '';
+    if (container) {
+      const badge = container.querySelector('.status-passed, .status-failed, .status-missed');
+      if (badge) {
+        badge.className = 'tag-badge status-missed';
+        badge.textContent = 'MISSED';
+      }
+    }
+  }
+}
+
+// Save active entry data directly from DOM values (used on close, blur, or manual save)
 function saveFromDOM(isManualClick = false) {
   const entry = entries.find(e => e.id === activeEntryId);
   if (!entry) return Promise.resolve();
+
+  if (!entry.customAttributes) {
+    entry.customAttributes = {};
+  }
 
   // Determine active view/platform
   const desktopPane = document.getElementById('desktop-detail-pane');
@@ -3640,19 +3742,11 @@ function saveFromDOM(isManualClick = false) {
   const mobilePane = document.getElementById('mobile-detail-pane');
   const isMobile = mobilePane && mobilePane.classList.contains('open');
 
-  let hasData = false;
-
   if (isDesktop) {
     const notesEl = document.getElementById('detail-notes');
-    if (notesEl) {
-      entry.notes = notesEl.value;
-      if (notesEl.value.trim() !== '') hasData = true;
-    }
+    if (notesEl) entry.notes = notesEl.value;
     const mistakesEl = document.getElementById('detail-mistakes');
-    if (mistakesEl) {
-      entry.mistakes = mistakesEl.value;
-      if (mistakesEl.value.trim() !== '') hasData = true;
-    }
+    if (mistakesEl) entry.mistakes = mistakesEl.value;
 
     const attrRows = document.querySelectorAll('#detail-attributes-list .attribute-row');
     attrRows.forEach(row => {
@@ -3672,21 +3766,12 @@ function saveFromDOM(isManualClick = false) {
         val = val === '' ? '' : Number(val);
       }
       entry.customAttributes[attrKey] = val;
-      if (val !== undefined && val !== null && val !== '') {
-        hasData = true;
-      }
     });
   } else if (isMobile) {
     const notesEl = document.getElementById('mobile-detail-notes');
-    if (notesEl) {
-      entry.notes = notesEl.value;
-      if (notesEl.value.trim() !== '') hasData = true;
-    }
+    if (notesEl) entry.notes = notesEl.value;
     const mistakesEl = document.getElementById('mobile-detail-mistakes');
-    if (mistakesEl) {
-      entry.mistakes = mistakesEl.value;
-      if (mistakesEl.value.trim() !== '') hasData = true;
-    }
+    if (mistakesEl) entry.mistakes = mistakesEl.value;
 
     const attrRows = document.querySelectorAll('#mobile-detail-attributes-list .attribute-row');
     attrRows.forEach(row => {
@@ -3706,9 +3791,6 @@ function saveFromDOM(isManualClick = false) {
         val = val === '' ? '' : Number(val);
       }
       entry.customAttributes[attrKey] = val;
-      if (val !== undefined && val !== null && val !== '') {
-        hasData = true;
-      }
     });
   }
 
@@ -3724,14 +3806,13 @@ function saveFromDOM(isManualClick = false) {
       chg !== '' && chg !== undefined && chg !== null) {
     const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
     entry.customAttributes['P&L'] = computedPL;
-    hasData = true;
   }
 
   // Recalculate status
   updateEntryStatus(entry);
 
-  if (hasData || isManualClick || (entry.patterns && entry.patterns.length > 0) || (entry.images && entry.images.length > 0)) {
-    entry._touched = true;
+  if (isManualClick) {
+    entry._saved = true;
   }
 
   entry.updatedAt = new Date().toISOString();
@@ -3748,6 +3829,7 @@ function saveFromDOM(isManualClick = false) {
 function manualSave() {
   saveFromDOM(true).then(() => {
     showToast('Saved!', 'success');
+    renderAll();
   });
 }
 
@@ -4052,7 +4134,7 @@ function createNewEntry() {
     bookmarked: false,
     createdAt: now,
     updatedAt: now,
-    _touched: false
+    _saved: false
   };
 
   // Populate custom fields defaults
@@ -4102,6 +4184,7 @@ function handleImageFileSelect(input, platform) {
       entry.images.push(e.target.result);
       activeImageIndex = entry.images.length - 1; // set new image as active
       entry.updatedAt = new Date().toISOString();
+      entry._saved = true;
       saveDatabase(entry, false, true);
       renderDetailOnly();
     }
@@ -4329,14 +4412,23 @@ function renderMobileGallery(list) {
 
 // Mobile Details close arrow trigger
 function closeMobileDetail() {
-  saveFromDOM(false);
-  setTimeout(() => {
-    discardEmptyEntryIfNecessary();
-    const mobileDetail = document.getElementById('mobile-detail-pane');
-    if (mobileDetail) mobileDetail.classList.remove('open');
-    activeEntryId = null;
-    renderAll();
-  }, 150);
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (entry) {
+    if (!entry._saved) {
+      discardUnsavedNewEntry(entry.id);
+    } else if (originalEntryState && originalEntryState.id === entry.id) {
+      // Revert in-memory edits to original state
+      const idx = entries.findIndex(e => e.id === entry.id);
+      if (idx !== -1) {
+        entries[idx] = JSON.parse(JSON.stringify(originalEntryState));
+      }
+    }
+  }
+  originalEntryState = null;
+  const mobileDetail = document.getElementById('mobile-detail-pane');
+  if (mobileDetail) mobileDetail.classList.remove('open');
+  activeEntryId = null;
+  renderAll();
 }
 
 function renderMobileDetail() {
@@ -4392,13 +4484,13 @@ function renderMobileDetail() {
   // Bias - color chips
   const biasChipsHTML = `
     <div class="bias-chips-container">
-      <div class="bias-chip ${entry.bias === 'Bullish' ? 'active-bull' : ''}" onclick="saveCurrentField('bias', 'Bullish'); renderAll();">
+      <div class="bias-chip ${entry.bias === 'Bullish' ? 'active-bull' : ''}" onclick="setBias('Bullish', this)">
         <span class="bias-chip-dot" style="background: var(--color-bull);"></span> Bullish
       </div>
-      <div class="bias-chip ${entry.bias === 'Bearish' ? 'active-bear' : ''}" onclick="saveCurrentField('bias', 'Bearish'); renderAll();">
+      <div class="bias-chip ${entry.bias === 'Bearish' ? 'active-bear' : ''}" onclick="setBias('Bearish', this)">
         <span class="bias-chip-dot" style="background: var(--color-bear);"></span> Bearish
       </div>
-      <div class="bias-chip ${entry.bias === 'Both' ? 'active-both' : ''}" onclick="saveCurrentField('bias', 'Both'); renderAll();">
+      <div class="bias-chip ${entry.bias === 'Both' ? 'active-both' : ''}" onclick="setBias('Both', this)">
         <span class="bias-chip-dot" style="background: var(--color-both);"></span> Both
       </div>
     </div>
@@ -4407,7 +4499,7 @@ function renderMobileDetail() {
   attrList.appendChild(biasRow);
 
   // Date
-  const dateRow = createAttributeRowHTML('Date', `<input type="date" class="input-text" value="${entry.date}" onchange="saveCurrentField('date', this.value)">`, 'fa-solid fa-calendar');
+  const dateRow = createAttributeRowHTML('Date', `<input type="date" class="input-text" value="${entry.date}" onchange="setEntryDate(this.value)">`, 'fa-solid fa-calendar');
   attrList.appendChild(dateRow);
 
   // Candle Patterns
@@ -4427,10 +4519,10 @@ function renderMobileDetail() {
 
   // Entry and Exit Price (side-by-side)
   const entryPriceVal = entry.customAttributes && entry.customAttributes['Entry Price'] !== undefined ? entry.customAttributes['Entry Price'] : '';
-  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" class="input-text" value="${entryPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Entry Price', this.value)">`, 'fa-solid fa-dollar-sign');
+  const entryPriceRow = createAttributeRowHTML('Entry', `<input type="number" id="mobile-input-entry" class="input-text" value="${entryPriceVal}" placeholder="Optional" oninput="updateCalculationsRealTime('mobile')">`, 'fa-solid fa-dollar-sign');
   
   const exitPriceVal = entry.customAttributes && entry.customAttributes['Exit Price'] !== undefined ? entry.customAttributes['Exit Price'] : '';
-  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" class="input-text" value="${exitPriceVal}" placeholder="Optional" oninput="saveCalculateAttribute('Exit Price', this.value)">`, 'fa-solid fa-arrow-right-to-bracket');
+  const exitPriceRow = createAttributeRowHTML('Exit', `<input type="number" id="mobile-input-exit" class="input-text" value="${exitPriceVal}" placeholder="Optional" oninput="updateCalculationsRealTime('mobile')">`, 'fa-solid fa-arrow-right-to-bracket');
 
   const pricePair = document.createElement('div');
   pricePair.className = 'attribute-row-pair';
@@ -4440,10 +4532,10 @@ function renderMobileDetail() {
 
   // Quantity and Charges (side-by-side)
   const quantityVal = entry.customAttributes && entry.customAttributes['Quantity'] !== undefined ? entry.customAttributes['Quantity'] : '';
-  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" class="input-text" value="${quantityVal}" placeholder="Optional" oninput="saveCalculateAttribute('Quantity', this.value)">`, 'fa-solid fa-calculator');
+  const quantityRow = createAttributeRowHTML('Qty', `<input type="number" id="mobile-input-qty" class="input-text" value="${quantityVal}" placeholder="Optional" oninput="updateCalculationsRealTime('mobile')">`, 'fa-solid fa-calculator');
   
   const chargesVal = entry.customAttributes && entry.customAttributes['Charges'] !== undefined ? entry.customAttributes['Charges'] : '';
-  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" class="input-text" value="${chargesVal}" placeholder="Optional" oninput="saveCalculateAttribute('Charges', this.value)">`, 'fa-solid fa-percent');
+  const chargesRow = createAttributeRowHTML('Charges', `<input type="number" id="mobile-input-charges" class="input-text" value="${chargesVal}" placeholder="Optional" oninput="updateCalculationsRealTime('mobile')">`, 'fa-solid fa-percent');
 
   const qtyChargesPair = document.createElement('div');
   qtyChargesPair.className = 'attribute-row-pair';
@@ -4458,7 +4550,7 @@ function renderMobileDetail() {
     const currentVal = entry.customAttributes[attr.name] !== undefined ? entry.customAttributes[attr.name] : attr.defaultValue;
     
     if (attr.name === 'Market') {
-      inputHTML = `<input type="text" list="market-datalist-mob" class="input-text" value="${currentVal}" oninput="saveCustomAttribute('Market', this.value)">
+      inputHTML = `<input type="text" id="mobile-input-market" list="market-datalist-mob" class="input-text" value="${currentVal}">
         <datalist id="market-datalist-mob">
           <option value="Nifty 50">
           <option value="Bank Nifty">
@@ -4467,17 +4559,17 @@ function renderMobileDetail() {
           <option value="Crude Oil">
         </datalist>`;
     } else if (attr.name === 'P&L') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('P&L', Number(this.value))">`;
+      inputHTML = `<input type="number" id="mobile-input-pl" class="input-text" value="${currentVal}" placeholder="0" readonly style="opacity: 0.8; cursor: not-allowed;">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
         optionsHtml += `<option value="${opt}" ${currentVal === opt ? 'selected' : ''}>${opt || 'Optional'}</option>`;
       });
-      inputHTML = `<select class="input-select" onchange="saveCustomAttribute('${attr.name}', this.value)">${optionsHtml}</select>`;
+      inputHTML = `<select class="input-select">${optionsHtml}</select>`;
     } else if (attr.type === 'number') {
-      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0" oninput="saveCustomAttribute('${attr.name}', Number(this.value))">`;
+      inputHTML = `<input type="number" class="input-text" value="${currentVal}" placeholder="0">`;
     } else {
-      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional" oninput="saveCustomAttribute('${attr.name}', this.value)">`;
+      inputHTML = `<input type="text" class="input-text" value="${currentVal}" placeholder="Optional">`;
     }
 
     const isSystemAttribute = (attr.name === 'Market' || attr.name === 'P&L');
