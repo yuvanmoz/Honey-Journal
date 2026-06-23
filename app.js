@@ -679,6 +679,9 @@ async function loadDatabase() {
         // Migrate loaded entries
         entries.forEach(e => {
           if (!e.images) e.images = e.image ? [e.image] : [];
+          if (!e.primaryImages) {
+            e.primaryImages = (e.images && e.images.length > 0) ? [0] : [];
+          }
           updateEntryStatus(e);
           e._saved = true;
         });
@@ -732,6 +735,9 @@ async function loadDatabase() {
   // Migrate entries: old single-image string → images array, and status based on P&L
   entries.forEach(e => {
     if (!e.images) e.images = e.image ? [e.image] : [];
+    if (!e.primaryImages) {
+      e.primaryImages = (e.images && e.images.length > 0) ? [0] : [];
+    }
     updateEntryStatus(e);
     e._saved = true;
   });
@@ -1353,7 +1359,8 @@ function renderDesktopGallery(list) {
       });
     }
 
-    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+    const primaryIdx = entry.primaryImages && entry.primaryImages.length > 0 ? entry.primaryImages[0] : 0;
+    const firstImage = entry.images && entry.images.length > 0 ? (entry.images[primaryIdx] || entry.images[0]) : '';
     const hasImage = firstImage !== '';
 
     const transformStyle = hasImage && (entry.imageScale || entry.imageX || entry.imageY)
@@ -1435,7 +1442,8 @@ function renderDesktopTable(list) {
     else if (plNum > 0) plColor = 'var(--color-bull)';
     const plDisplay = plNum !== 0 ? `${plNum > 0 ? '+' : ''}₹${plNum}` : '₹0';
 
-    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+    const primaryIdx = entry.primaryImages && entry.primaryImages.length > 0 ? entry.primaryImages[0] : 0;
+    const firstImage = entry.images && entry.images.length > 0 ? (entry.images[primaryIdx] || entry.images[0]) : '';
 
     tr.innerHTML = `
       <td>${firstImage ? `<img src="${firstImage}" class="table-img">` : `<div class="table-img" style="background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-chart-line" style="color:var(--text-muted); font-size:12px;"></i></div>`}</td>
@@ -1605,7 +1613,8 @@ function openCalendarDrawer(dateString) {
         });
       }
 
-      const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+      const primaryIdx = entry.primaryImages && entry.primaryImages.length > 0 ? entry.primaryImages[0] : 0;
+      const firstImage = entry.images && entry.images.length > 0 ? (entry.images[primaryIdx] || entry.images[0]) : '';
       const imgHtml = firstImage 
         ? `<img src="${firstImage}" class="drawer-setup-img">`
         : `<div class="drawer-setup-img" style="display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary);"><i class="fa-solid fa-chart-line" style="color:var(--text-muted); font-size:14px;"></i></div>`;
@@ -3636,6 +3645,80 @@ function saveCurrentField(field, val) {
   renderDetailOnly();
 }
 
+function reorderImages(entry, fromIdx, toIdx) {
+  if (fromIdx === toIdx) return;
+  if (!entry.images) return;
+
+  const images = entry.images;
+  const item = images[fromIdx];
+  
+  images.splice(fromIdx, 1);
+  
+  let adjustedToIdx = toIdx;
+  if (fromIdx < toIdx) {
+    adjustedToIdx = toIdx - 1;
+  }
+  
+  images.splice(adjustedToIdx, 0, item);
+
+  if (activeImageIndex === fromIdx) {
+    activeImageIndex = adjustedToIdx;
+  } else if (activeImageIndex > fromIdx && activeImageIndex <= adjustedToIdx) {
+    activeImageIndex--;
+  } else if (activeImageIndex < fromIdx && activeImageIndex >= adjustedToIdx) {
+    activeImageIndex++;
+  }
+
+  if (entry.primaryImages && entry.primaryImages.length > 0) {
+    const newPrimaries = [];
+    entry.primaryImages.forEach(pIdx => {
+      if (pIdx === fromIdx) {
+        newPrimaries.push(adjustedToIdx);
+      } else {
+        let newIdx = pIdx;
+        if (fromIdx < pIdx && pIdx <= adjustedToIdx) {
+          newIdx = pIdx - 1;
+        } else if (adjustedToIdx <= pIdx && pIdx < fromIdx) {
+          newIdx = pIdx + 1;
+        }
+        newPrimaries.push(newIdx);
+      }
+    });
+    entry.primaryImages = [...new Set(newPrimaries)].sort((a, b) => a - b);
+  }
+
+  entry.updatedAt = new Date().toISOString();
+  saveDatabase(entry, false, true);
+  renderDetailOnly();
+}
+
+function moveThumbnail(idx, direction) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry || !entry.images) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= entry.images.length) return;
+  
+  const toIdx = direction === -1 ? idx - 1 : idx + 2;
+  reorderImages(entry, idx, toIdx);
+}
+
+function togglePrimaryImage(index) {
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) return;
+  if (!entry.primaryImages) entry.primaryImages = [];
+  
+  const pos = entry.primaryImages.indexOf(index);
+  if (pos >= 0) {
+    entry.primaryImages.splice(pos, 1);
+  } else {
+    entry.primaryImages.push(index);
+  }
+  
+  entry.updatedAt = new Date().toISOString();
+  saveDatabase(entry, false, true);
+  renderDetailOnly();
+}
+
 // Save Custom Attributes
 function saveCustomAttribute(attrName, val) {
   const entry = entries.find(e => e.id === activeEntryId);
@@ -4173,6 +4256,7 @@ function createNewEntry() {
     patterns: [],
     status: "MISSED",
     images: [],
+    primaryImages: [],
     notes: "",
     mistakes: "",
     customAttributes: {},
@@ -4242,6 +4326,11 @@ function deleteActiveImage(platform) {
   const entry = entries.find(e => e.id === activeEntryId);
   if (!entry || !entry.images || entry.images.length === 0) return;
 
+  if (entry.primaryImages) {
+    const pos = entry.primaryImages.indexOf(activeImageIndex);
+    if (pos >= 0) entry.primaryImages.splice(pos, 1);
+    entry.primaryImages = entry.primaryImages.map(pIdx => pIdx > activeImageIndex ? pIdx - 1 : pIdx);
+  }
   entry.images.splice(activeImageIndex, 1);
   if (activeImageIndex >= entry.images.length) {
     activeImageIndex = Math.max(0, entry.images.length - 1);
@@ -4256,6 +4345,11 @@ function deleteImageByIndex(index) {
   const entry = entries.find(e => e.id === activeEntryId);
   if (!entry || !entry.images || index < 0 || index >= entry.images.length) return;
 
+  if (entry.primaryImages) {
+    const pos = entry.primaryImages.indexOf(index);
+    if (pos >= 0) entry.primaryImages.splice(pos, 1);
+    entry.primaryImages = entry.primaryImages.map(pIdx => pIdx > index ? pIdx - 1 : pIdx);
+  }
   entry.images.splice(index, 1);
   if (activeImageIndex >= entry.images.length) {
     activeImageIndex = Math.max(0, entry.images.length - 1);
@@ -4275,13 +4369,120 @@ function renderThumbnailStrip(entry, platform) {
 
   imgs.forEach((imgSrc, idx) => {
     const thumb = document.createElement('div');
-    thumb.className = `thumbnail-item ${idx === activeImageIndex ? 'active' : ''}`;
+    const isPrimary = entry.primaryImages && entry.primaryImages.includes(idx);
+    thumb.className = `thumbnail-item ${idx === activeImageIndex ? 'active' : ''} ${isPrimary ? 'is-primary' : ''}`;
     thumb.onclick = () => {
       activeImageIndex = idx;
       renderDetailOnly();
     };
+    
+    // HTML5 drag and drop (Desktop)
+    thumb.draggable = true;
+    
+    thumb.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', idx);
+      thumb.classList.add('dragging');
+    });
+
+    thumb.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const rect = thumb.getBoundingClientRect();
+      const relX = e.clientX - rect.left;
+      if (relX < rect.width / 2) {
+        thumb.classList.add('drag-over-left');
+        thumb.classList.remove('drag-over-right');
+      } else {
+        thumb.classList.add('drag-over-right');
+        thumb.classList.remove('drag-over-left');
+      }
+    });
+
+    thumb.addEventListener('dragleave', () => {
+      thumb.classList.remove('drag-over-left', 'drag-over-right');
+    });
+
+    thumb.addEventListener('dragend', () => {
+      thumb.classList.remove('dragging', 'drag-over-left', 'drag-over-right');
+    });
+
+    thumb.addEventListener('drop', (e) => {
+      e.preventDefault();
+      thumb.classList.remove('drag-over-left', 'drag-over-right');
+      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(fromIndex) || fromIndex === idx) return;
+
+      const rect = thumb.getBoundingClientRect();
+      const relX = e.clientX - rect.left;
+      let targetIndex = idx;
+      if (relX >= rect.width / 2) {
+        targetIndex = idx + 1;
+      }
+      reorderImages(entry, fromIndex, targetIndex);
+    });
+
+    // Touch drag and drop (Mobile / WebView)
+    let touchStartIdx = -1;
+    
+    thumb.addEventListener('touchstart', (e) => {
+      touchStartIdx = idx;
+      thumb.classList.add('dragging');
+    }, { passive: true });
+
+    thumb.addEventListener('touchmove', (e) => {
+      if (touchStartIdx !== idx) return;
+      if (e.cancelable) e.preventDefault(); // Prevent scrolling while dragging
+      
+      const touch = e.touches[0];
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetThumb = element ? element.closest('.thumbnail-item') : null;
+      
+      const allThumbs = container.querySelectorAll('.thumbnail-item');
+      allThumbs.forEach(t => t.classList.remove('drag-over-left', 'drag-over-right'));
+      
+      if (targetThumb && targetThumb !== thumb) {
+        const rect = targetThumb.getBoundingClientRect();
+        const relX = touch.clientX - rect.left;
+        if (relX < rect.width / 2) {
+          targetThumb.classList.add('drag-over-left');
+        } else {
+          targetThumb.classList.add('drag-over-right');
+        }
+      }
+    });
+
+    thumb.addEventListener('touchend', (e) => {
+      if (touchStartIdx !== idx) return;
+      thumb.classList.remove('dragging');
+      
+      const touch = e.changedTouches[0];
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetThumb = element ? element.closest('.thumbnail-item') : null;
+      
+      if (targetThumb && targetThumb !== thumb) {
+        const allThumbs = Array.from(container.querySelectorAll('.thumbnail-item'));
+        const targetIdx = allThumbs.indexOf(targetThumb);
+        
+        if (targetIdx !== -1) {
+          const rect = targetThumb.getBoundingClientRect();
+          const relX = touch.clientX - rect.left;
+          let targetIndex = targetIdx;
+          if (relX >= rect.width / 2) {
+            targetIndex = targetIdx + 1;
+          }
+          reorderImages(entry, touchStartIdx, targetIndex);
+        }
+      }
+      
+      const allThumbs = container.querySelectorAll('.thumbnail-item');
+      allThumbs.forEach(t => t.classList.remove('drag-over-left', 'drag-over-right'));
+      touchStartIdx = -1;
+    });
+
     thumb.innerHTML = `
       <img src="${imgSrc}" class="thumbnail-img">
+      <button class="thumb-primary" onclick="event.stopPropagation(); togglePrimaryImage(${idx});" title="${isPrimary ? 'Remove primary star' : 'Mark as primary'}">
+        <i class="${isPrimary ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+      </button>
       <button class="thumb-delete" onclick="event.stopPropagation(); deleteImageByIndex(${idx});" title="Remove image"><i class="fa-solid fa-xmark"></i></button>
     `;
     container.appendChild(thumb);
@@ -4431,7 +4632,8 @@ function renderMobileGallery(list) {
       });
     }
 
-    const firstImage = entry.images && entry.images.length > 0 ? entry.images[0] : '';
+    const primaryIdx = entry.primaryImages && entry.primaryImages.length > 0 ? entry.primaryImages[0] : 0;
+    const firstImage = entry.images && entry.images.length > 0 ? (entry.images[primaryIdx] || entry.images[0]) : '';
     const hasImage = firstImage !== '';
     const transformStyle = hasImage && (entry.imageScale || entry.imageX || entry.imageY)
       ? `style="transform: scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px); transform-origin: center center;"`
@@ -4899,12 +5101,17 @@ function openPatternSubGallery(patternName) {
   
   currentSubGalleryImages = [];
   patternEntries.forEach(entry => {
-    (entry.images || []).forEach((imgSrc, imgIndex) => {
-      currentSubGalleryImages.push({
-        src: imgSrc,
-        entry: entry,
-        imageIndex: imgIndex
-      });
+    const primaryIndices = entry.primaryImages && entry.primaryImages.length > 0 
+      ? entry.primaryImages 
+      : [0];
+    primaryIndices.forEach(imgIndex => {
+      if (imgIndex < entry.images.length) {
+        currentSubGalleryImages.push({
+          src: entry.images[imgIndex],
+          entry: entry,
+          imageIndex: imgIndex
+        });
+      }
     });
   });
 

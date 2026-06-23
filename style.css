@@ -2303,7 +2303,8 @@ button, input, select, textarea {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 8px 0;
+  padding: 8px;
+  box-sizing: border-box;
   margin-top: 8px;
   width: 100%;
 }
@@ -2371,10 +2372,10 @@ button, input, select, textarea {
 /* ── Thumbnail Delete Button (per item) ────────────────────────────────── */
 .thumbnail-item .thumb-delete {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 16px;
-  height: 16px;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
   background: var(--color-bear);
   border: 1.5px solid var(--bg-primary);
   border-radius: 50%;
@@ -2382,7 +2383,7 @@ button, input, select, textarea {
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 8px;
+  font-size: 10px;
   cursor: pointer;
   opacity: 1;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
@@ -2392,9 +2393,62 @@ button, input, select, textarea {
 }
 
 .thumbnail-item .thumb-delete:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
   background-color: #d32f2f;
 }
+
+/* ── Thumbnail Primary (Star) Button & Drag/Drop ──────────────────────── */
+.thumbnail-item.is-primary {
+  border-color: var(--accent-gold);
+  outline-color: var(--accent-gold);
+}
+
+.thumbnail-item .thumb-primary {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 18px;
+  height: 18px;
+  background: var(--bg-tertiary);
+  border: 1.5px solid var(--border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  z-index: 5;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
+  padding: 0;
+}
+
+.thumbnail-item .thumb-primary:hover {
+  transform: scale(1.15);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.thumbnail-item.is-primary .thumb-primary {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: #fff;
+}
+
+.thumbnail-item.dragging {
+  opacity: 0.4;
+  border: 2px dashed var(--accent-gold);
+}
+
+.thumbnail-item.drag-over-left {
+  border-left: 3px solid var(--accent-gold) !important;
+}
+
+.thumbnail-item.drag-over-right {
+  border-right: 3px solid var(--accent-gold) !important;
+}
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    BIAS COLOR CHIPS (Tag Creation Dialog)
@@ -2796,6 +2850,152 @@ button, input, select, textarea {
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* ── Ring-Style Metric Cards (Apple Fitness / Activity Rings) ───────────── */
+.ring-metric-card {
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.05), transparent), var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: var(--glass-shadow);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  min-height: 0;
+}
+[data-theme="light"] .ring-metric-card {
+  background: radial-gradient(circle at top left, rgba(0, 0, 0, 0.02), transparent), var(--glass-bg);
+}
+.ring-metric-card:hover {
+  transform: translateY(-3px) scale(1.008);
+  box-shadow: var(--glass-shadow), 0 10px 24px rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+[data-theme="light"] .ring-metric-card:hover {
+  box-shadow: var(--glass-shadow), 0 6px 16px rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+.ring-metric-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ring-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+.ring-metric-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.ring-metric-value.bull { color: var(--color-bull); }
+.ring-metric-value.bear { color: var(--color-bear); }
+.ring-metric-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+.ring-metric-sub span.bull { color: var(--color-bull); font-weight: 600; }
+.ring-metric-sub span.bear { color: var(--color-bear); font-weight: 600; }
+
+/* Ring SVG container */
+.ring-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.ring-wrap svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 5;
+}
+[data-theme="light"] .ring-track {
+  stroke: rgba(0, 0, 0, 0.06);
+}
+.ring-segment {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.8s cubic-bezier(0.16, 1, 0.3, 1), stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  pointer-events: none;
+}
+.ring-center-pct {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.ring-center-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.ring-center-label {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 1px;
+}
+
+/* Compact mobile ring cards */
+@media (max-width: 800px) {
+  .ring-metric-card {
+    padding: 12px 14px;
+    gap: 12px;
+    border-radius: 16px;
+  }
+  .ring-metric-value {
+    font-size: 18px;
+  }
+  .ring-metric-label {
+    font-size: 10px;
+  }
+  .ring-wrap {
+    width: 52px;
+    height: 52px;
+  }
+  .ring-center-pct {
+    font-size: 12px;
+  }
+  .ring-center-icon {
+    font-size: 13px;
+  }
+}
+/* ── End Ring-Style Metric Cards ────────────────────────────────────────── */
+
 .apple-insights-section {
   padding: 16px 28px 28px 28px;
   border-top: 1px solid var(--border-color);
