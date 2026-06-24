@@ -2012,8 +2012,12 @@ function calculateJournalStats() {
     })
     .sort((a, b) => b.totalPL - a.totalPL);
 
+  const passedCount = executedEntries.filter(e => e.status === 'PASSED').length;
+  const failedCount = executedEntries.filter(e => e.status === 'FAILED').length;
+
   return {
     totalEntries, executedCount, missedCount,
+    passedCount, failedCount,
     tradingDays, noTradeDays,
     grossProfit, grossLoss, netPL,
     winRate, profitFactor, expectancy,
@@ -2499,111 +2503,201 @@ function renderJournalStatsTab(isMobile = false) {
     </div>
   `;
   
+  const execPct = (stats.totalEntries > 0 ? (stats.executedCount / stats.totalEntries * 100) : 0);
+  const passedPct = (stats.executedCount > 0 ? (stats.passedCount / stats.executedCount * 100) : 0);
+  const missedPct = (stats.totalEntries > 0 ? (stats.missedCount / stats.totalEntries * 100) : 0);
+  const failedPct = (stats.executedCount > 0 ? (stats.failedCount / stats.executedCount * 100) : 0);
+  window.lastTotalSetups = stats.totalEntries;
+
   const activityHtml = `
     <div class="stats-section-title">Trade Activity</div>
-    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Trade Execution Ratio</div>
-          <div style="font-size:13px; font-weight:700; color:var(--text-main);">${stats.executedCount} / ${stats.totalEntries} <span style="font-size:10px; color:var(--text-muted); font-weight:500;">Executed</span></div>
+    <div style="margin-bottom: ${isMobile ? '16px' : '24px'}; display: flex; justify-content: flex-start;">
+      <div class="apple-fitness-card" style="grid-template-columns: 140px 1fr; max-width: 440px; width: 100%; box-sizing: border-box; padding: 16px 20px;">
+        <div class="ring-svg-container" id="activity-rings-svg-container">
+          <svg width="130" height="130" viewBox="0 0 140 140">
+            <!-- Total Logged (Outer) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="54" stroke="#ffcc00" stroke-width="10" />
+            <circle class="fitness-ring-fg ring-active ring-total" cx="70" cy="70" r="54" stroke="#ffcc00" stroke-width="10" 
+              stroke-dasharray="339.29" stroke-dashoffset="0" />
+            
+            <!-- Executed (Middle) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="40" stroke="#007aff" stroke-width="10" />
+            <circle class="fitness-ring-fg ring-active ring-executed" cx="70" cy="70" r="40" stroke="#007aff" stroke-width="10" 
+              stroke-dasharray="251.32" stroke-dashoffset="${251.32 - (execPct / 100) * 251.32}" />
+            
+            <!-- Passed (Inner) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="26" stroke="#34c759" stroke-width="10" />
+            <circle class="fitness-ring-fg ring-active ring-passed" cx="70" cy="70" r="26" stroke="#34c759" stroke-width="10" 
+              stroke-dasharray="163.36" stroke-dashoffset="${163.36 - (passedPct / 100) * 163.36}" />
+          </svg>
+          <div class="ring-center-readout">
+            <span class="ring-center-value" id="activity-center-value" style="font-size:18px;">${stats.totalEntries}</span>
+            <span class="ring-center-label" id="activity-center-label" style="font-size:8px;">Total Setups</span>
+          </div>
         </div>
-        <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; display:flex;">
-          <div style="width:${(stats.executedCount / stats.totalEntries * 100) || 0}%; background:var(--color-both); border-radius:4px 0 0 4px;" title="Executed: ${stats.executedCount}"></div>
-          <div style="width:${(stats.missedCount / stats.totalEntries * 100) || 0}%; background:var(--accent-gold); border-radius:0 4px 4px 0;" title="Missed: ${stats.missedCount}"></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:500;">
-          <span><i class="fa-solid fa-circle" style="color:var(--color-both); font-size:7px; margin-right:3px;"></i> Executed (${stats.executedCount})</span>
-          <span><i class="fa-solid fa-circle" style="color:var(--accent-gold); font-size:7px; margin-right:3px;"></i> Missed (${stats.missedCount})</span>
-        </div>
-      </div>
-      
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Trading Days Activity</div>
-          <div style="font-size:13px; font-weight:700; color:var(--text-main);">${stats.tradingDays} / ${stats.tradingDays + stats.noTradeDays} <span style="font-size:10px; color:var(--text-muted); font-weight:500;">Active</span></div>
-        </div>
-        <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; display:flex;">
-          <div style="width:${(stats.tradingDays / (stats.tradingDays + stats.noTradeDays) * 100) || 0}%; background:var(--color-bull); border-radius:4px 0 0 4px;" title="Active Days: ${stats.tradingDays}"></div>
-          <div style="width:${(stats.noTradeDays / (stats.tradingDays + stats.noTradeDays) * 100) || 0}%; background:rgba(255,255,255,0.15); border-radius:0 4px 4px 0;" title="No-Trade Days: ${stats.noTradeDays}"></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:500;">
-          <span><i class="fa-solid fa-circle" style="color:var(--color-bull); font-size:7px; margin-right:3px;"></i> Active Days (${stats.tradingDays})</span>
-          <span><i class="fa-solid fa-circle" style="color:rgba(255,255,255,0.3); font-size:7px; margin-right:3px;"></i> No-Trade Days (${stats.noTradeDays})</span>
+        
+        <div class="ring-legend" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;">
+          <!-- Total Logged spans both columns -->
+          <div class="ring-legend-item activity-legend-item" data-ring="total" style="grid-column: span 2; padding: 6px 10px;" onmouseover="focusActivityRing('total', '${stats.totalEntries}', 'Total Logged')" onmouseout="resetActivityRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#ffcc00;"></span>
+              <span class="ring-legend-name" style="font-size:10px;">Total Logged</span>
+            </div>
+            <span class="ring-legend-val" style="font-size:11px;">${stats.totalEntries}</span>
+          </div>
+          
+          <!-- Executed -->
+          <div class="ring-legend-item activity-legend-item" data-ring="executed" style="padding: 6px 10px;" onmouseover="focusActivityRing('executed', '${stats.executedCount} (${execPct.toFixed(0)}%)', 'Executed')" onmouseout="resetActivityRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#007aff;"></span>
+              <span class="ring-legend-name" style="font-size:10px;">Executed</span>
+            </div>
+            <span class="ring-legend-val" style="font-size:11px;">${stats.executedCount}</span>
+          </div>
+          
+          <!-- Missed -->
+          <div class="ring-legend-item activity-legend-item" data-ring="total" style="padding: 6px 10px;" onmouseover="focusActivityRing('total', '${stats.missedCount} (${missedPct.toFixed(0)}%)', 'Missed')" onmouseout="resetActivityRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#ff9500;"></span>
+              <span class="ring-legend-name" style="font-size:10px;">Missed</span>
+            </div>
+            <span class="ring-legend-val" style="font-size:11px;">${stats.missedCount}</span>
+          </div>
+          
+          <!-- Passed -->
+          <div class="ring-legend-item activity-legend-item" data-ring="passed" style="padding: 6px 10px;" onmouseover="focusActivityRing('passed', '${stats.passedCount} (${passedPct.toFixed(0)}%)', 'Passed Wins')" onmouseout="resetActivityRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#34c759;"></span>
+              <span class="ring-legend-name" style="font-size:10px;">Passed</span>
+            </div>
+            <span class="ring-legend-val" style="font-size:11px;">${stats.passedCount}</span>
+          </div>
+          
+          <!-- Failed -->
+          <div class="ring-legend-item activity-legend-item" data-ring="executed" style="padding: 6px 10px;" onmouseover="focusActivityRing('executed', '${stats.failedCount} (${failedPct.toFixed(0)}%)', 'Failed')" onmouseout="resetActivityRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#ff2d55;"></span>
+              <span class="ring-legend-name" style="font-size:10px;">Failed</span>
+            </div>
+            <span class="ring-legend-val" style="font-size:11px;">${stats.failedCount}</span>
+          </div>
         </div>
       </div>
     </div>
   `;
 
   const pnlClass = stats.netPL >= 0 ? 'bull' : 'bear';
+  const winDaysPct = (stats.winDaysCount / (stats.winDaysCount + stats.lossDaysCount) * 100) || 0;
+  const activeDaysPct = (stats.tradingDays / (stats.tradingDays + stats.noTradeDays) * 100) || 0;
+  const consistencyScore = (stats.winRate + winDaysPct + activeDaysPct) / 3;
+  window.lastConsistencyScore = consistencyScore;
+
+  const profitRatioPct = (stats.grossProfit + Math.abs(stats.grossLoss)) !== 0
+    ? (stats.grossProfit / (stats.grossProfit + Math.abs(stats.grossLoss)) * 100)
+    : 0;
+  const ratioVal = stats.avgLossDay !== 0 ? (stats.avgWinDay / Math.abs(stats.avgLossDay)).toFixed(2) + 'x' : 'N/A';
+
   const metricsHtml = `
     <div class="stats-section-title">Performance Metrics</div>
-    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 2 : 4}, 1fr); gap: ${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '12px' : '20px'};">
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div class="apple-metric-label" style="font-size:12px; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
-          <span>Net P&L</span>
-          <i class="fa-solid ${stats.netPL >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}" style="color:${stats.netPL >= 0 ? 'var(--color-bull)' : 'var(--color-bear)'}; font-size:14px;"></i>
+    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '12px' : '20px'}; padding: 0;">
+      
+      <!-- Consistency Rings (Apple Fitness concentric rings) -->
+      <div class="apple-fitness-card">
+        <div class="ring-svg-container" id="concentric-rings-svg-container">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <!-- Win Rate (Outer) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="54" stroke="#ff2d55" stroke-width="10" />
+            <circle class="fitness-ring-fg ring-active ring-win" cx="70" cy="70" r="54" stroke="#ff2d55" stroke-width="10" 
+              stroke-dasharray="339.29" stroke-dashoffset="${339.29 - (stats.winRate / 100) * 339.29}" />
+            
+            <!-- Green Days (Middle) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="40" stroke="#34c759" stroke-width="10" />
+            <circle class="fitness-ring-fg ring-active ring-green" cx="70" cy="70" r="40" stroke="#34c759" stroke-width="10" 
+              stroke-dasharray="251.32" stroke-dashoffset="${251.32 - (winDaysPct / 100) * 251.32}" />
+            
+            <!-- Active Days (Inner) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="26" stroke="#007aff" stroke-width="10" />
+            <circle class="fitness-ring-fg ring-active ring-active-days" cx="70" cy="70" r="26" stroke="#007aff" stroke-width="10" 
+              stroke-dasharray="163.36" stroke-dashoffset="${163.36 - (activeDaysPct / 100) * 163.36}" />
+          </svg>
+          <div class="ring-center-readout">
+            <span class="ring-center-value" id="consistency-center-value">${consistencyScore.toFixed(0)}%</span>
+            <span class="ring-center-label" id="consistency-center-label">Consistency</span>
+          </div>
         </div>
-        <div class="apple-metric-value ${pnlClass}" style="font-size:22px; font-weight:800; margin: 4px 0;">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</div>
-        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted);">
-          Gross: <span style="color:var(--color-bull);">+₹${stats.grossProfit.toLocaleString()}</span> / <span style="color:var(--color-bear);">-₹${Math.abs(stats.grossLoss).toLocaleString()}</span>
+        
+        <div class="ring-legend">
+          <div class="ring-legend-item" data-ring="win-rate" onmouseover="focusRing('win-rate', '${stats.winRate.toFixed(1)}%', 'Win Rate')" onmouseout="resetRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#ff2d55;"></span>
+              <span class="ring-legend-name">Win Rate</span>
+            </div>
+            <span class="ring-legend-val">${stats.winRate.toFixed(1)}%</span>
+          </div>
+          
+          <div class="ring-legend-item" data-ring="green-days" onmouseover="focusRing('green-days', '${stats.winDaysCount}W - ${stats.lossDaysCount}L', 'Green Days')" onmouseout="resetRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#34c759;"></span>
+              <span class="ring-legend-name">Green Days</span>
+            </div>
+            <span class="ring-legend-val">${winDaysPct.toFixed(0)}%</span>
+          </div>
+          
+          <div class="ring-legend-item" data-ring="active-days" onmouseover="focusRing('active-days', '${stats.tradingDays}/${stats.tradingDays + stats.noTradeDays}', 'Active Days')" onmouseout="resetRings()">
+            <div class="ring-legend-left">
+              <span class="ring-legend-dot" style="background:#007aff;"></span>
+              <span class="ring-legend-name">Active Days</span>
+            </div>
+            <span class="ring-legend-val">${activeDaysPct.toFixed(0)}%</span>
+          </div>
         </div>
       </div>
       
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Win Rate</div>
-          <div class="win" style="font-size:15px; font-weight:800; color:var(--color-bull);">${stats.winRate.toFixed(1)}%</div>
+      <!-- Financial Efficiency & P&L Card -->
+      <div class="apple-fitness-card">
+        <div class="ring-svg-container">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <!-- Profit share (Gold) -->
+            <circle class="fitness-ring-bg" cx="70" cy="70" r="48" stroke="#ffcc00" stroke-width="12" />
+            <circle class="fitness-ring-fg" cx="70" cy="70" r="48" stroke="#ffcc00" stroke-width="12" 
+              stroke-dasharray="301.59" stroke-dashoffset="${301.59 - (profitRatioPct / 100) * 301.59}" />
+          </svg>
+          <div class="ring-center-readout">
+            <span class="ring-center-value" style="color:var(--accent-gold);">${ratioVal}</span>
+            <span class="ring-center-label">W/L Ratio</span>
+          </div>
         </div>
-        <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; display:flex; margin: 6px 0;">
-          <div style="width:${stats.winRate}%; background:var(--color-bull); border-radius:3px 0 0 3px;"></div>
-          <div style="width:${100 - stats.winRate}%; background:var(--color-bear); border-radius:0 3px 3px 0;"></div>
-        </div>
-        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted); text-align:right;">
-          ${stats.winRate.toFixed(0)}% wins of ${stats.executedCount} trades
+        
+        <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom:6px;">
+            <span style="font-size:11px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">NET P&L</span>
+            <span class="ring-legend-val ${pnlClass}" style="font-size:16px; font-weight:800;">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</span>
+          </div>
+          
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div>
+              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Avg Win Day</div>
+              <div class="bull" style="font-size:13px; font-weight:700; font-family:var(--font-display);">+₹${stats.avgWinDay.toFixed(0)}</div>
+            </div>
+            <div>
+              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Avg Loss Day</div>
+              <div class="bear" style="font-size:13px; font-weight:700; font-family:var(--font-display);">-₹${Math.abs(stats.avgLossDay).toFixed(0)}</div>
+            </div>
+          </div>
+          
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; border-top: 1px solid rgba(255,255,255,0.04); padding-top:6px;">
+            <div>
+              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Best Day</div>
+              <div class="bull" style="font-size:11px; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${stats.bestDayStr}">${stats.bestDayStr}</div>
+            </div>
+            <div>
+              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Worst Day</div>
+              <div class="bear" style="font-size:11px; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${stats.worstDayStr}">${stats.worstDayStr}</div>
+            </div>
+          </div>
         </div>
       </div>
       
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Profit vs Losing Days</div>
-          <div style="font-size:14px; font-weight:800; color:var(--text-main);">${stats.winDaysCount}W - ${stats.lossDaysCount}L</div>
-        </div>
-        <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; display:flex; margin: 6px 0;">
-          <div style="width:${(stats.winDaysCount / (stats.winDaysCount + stats.lossDaysCount) * 100) || 0}%; background:var(--color-bull); border-radius:3px 0 0 3px;"></div>
-          <div style="width:${(stats.lossDaysCount / (stats.winDaysCount + stats.lossDaysCount) * 100) || 0}%; background:var(--color-bear); border-radius:0 3px 3px 0;"></div>
-        </div>
-        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between;">
-          <span style="color:var(--color-bull); font-weight:600;">${stats.winDaysCount} Green</span>
-          <span style="color:var(--color-bear); font-weight:600;">${stats.lossDaysCount} Red</span>
-        </div>
-      </div>
-
-      <div class="apple-metric-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <div class="apple-metric-label" style="font-size:12px; font-weight:600;">Avg Win/Loss Ratio</div>
-          <div style="font-size:15px; font-weight:800; color:var(--text-main);">${stats.avgLossDay !== 0 ? (stats.avgWinDay / Math.abs(stats.avgLossDay)).toFixed(2) : 'N/A'}</div>
-        </div>
-        <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; display:flex; margin: 6px 0;">
-          <div style="width:${(stats.avgWinDay / (stats.avgWinDay + Math.abs(stats.avgLossDay)) * 100) || 0}%; background:var(--color-bull); border-radius:3px 0 0 3px;"></div>
-          <div style="width:${(Math.abs(stats.avgLossDay) / (stats.avgWinDay + Math.abs(stats.avgLossDay)) * 100) || 0}%; background:var(--color-bear); border-radius:0 3px 3px 0;"></div>
-        </div>
-        <div class="apple-metric-sub" style="font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between;">
-          <span>Avg Win: +₹${stats.avgWinDay.toFixed(0)}</span>
-          <span>Avg Loss: -₹${Math.abs(stats.avgLossDay).toFixed(0)}</span>
-        </div>
-      </div>
-    </div>
-    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'};">
-      <div class="apple-insight-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div class="apple-insight-title" style="font-size:11px;">Best Day / Average Winning Day</div>
-        <div class="apple-insight-value bull" style="font-size:${isMobile ? '14px' : '16px'}; font-weight:700;">${stats.bestDayStr}</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Average Win Day: ₹+${stats.avgWinDay.toFixed(0)}</div>
-      </div>
-      <div class="apple-insight-card" style="padding:${isMobile ? '12px' : '16px'}; margin:0;">
-        <div class="apple-insight-title" style="font-size:11px;">Worst Day / Average Losing Day</div>
-        <div class="apple-insight-value bear" style="font-size:${isMobile ? '14px' : '16px'}; font-weight:700;">${stats.worstDayStr}</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Average Loss Day: ₹-${Math.abs(stats.avgLossDay).toFixed(0)}</div>
-      </div>
     </div>
   `;
 
@@ -3281,8 +3375,8 @@ function renderDesktopDetail() {
           <option value="Crude Oil">
         </datalist>`;
     } else if (attr.name === 'P&L') {
-      // P&L is always numeric
-      inputHTML = `<input type="number" id="desktop-input-pl" class="input-text" value="${currentVal}" placeholder="0" readonly style="opacity: 0.8; cursor: not-allowed;">`;
+      // P&L is always numeric, but can be entered manually
+      inputHTML = `<input type="number" id="desktop-input-pl" class="input-text" value="${currentVal}" placeholder="0" oninput="updateCalculationsRealTime('desktop')">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {
@@ -3719,6 +3813,96 @@ function togglePrimaryImage(index) {
   renderDetailOnly();
 }
 
+function focusRing(type, val, label) {
+  const container = document.getElementById('concentric-rings-svg-container');
+  if (container) {
+    container.className = 'ring-svg-container';
+    if (type === 'win-rate') container.classList.add('focus-win');
+    else if (type === 'green-days') container.classList.add('focus-green');
+    else if (type === 'active-days') container.classList.add('focus-active');
+  }
+  
+  const legendItems = document.querySelectorAll('.ring-legend-item');
+  legendItems.forEach(item => {
+    if (item.getAttribute('data-ring') === type) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+
+  const valEl = document.getElementById('consistency-center-value');
+  const labelEl = document.getElementById('consistency-center-label');
+  if (valEl && labelEl) {
+    valEl.textContent = val;
+    labelEl.textContent = label;
+    valEl.style.transform = 'scale(1.1)';
+    setTimeout(() => { valEl.style.transform = 'scale(1)'; }, 150);
+  }
+}
+
+function resetRings() {
+  const container = document.getElementById('concentric-rings-svg-container');
+  if (container) {
+    container.className = 'ring-svg-container';
+  }
+  
+  const legendItems = document.querySelectorAll('.ring-legend-item');
+  legendItems.forEach(item => item.classList.remove('active'));
+
+  const valEl = document.getElementById('consistency-center-value');
+  const labelEl = document.getElementById('consistency-center-label');
+  if (valEl && labelEl && window.lastConsistencyScore !== undefined) {
+    valEl.textContent = window.lastConsistencyScore.toFixed(0) + '%';
+    labelEl.textContent = 'Consistency';
+  }
+}
+
+function focusActivityRing(type, val, label) {
+  const container = document.getElementById('activity-rings-svg-container');
+  if (container) {
+    container.className = 'ring-svg-container';
+    if (type === 'total') container.classList.add('focus-total');
+    else if (type === 'executed') container.classList.add('focus-executed');
+    else if (type === 'passed') container.classList.add('focus-passed');
+  }
+  
+  const legendItems = document.querySelectorAll('.activity-legend-item');
+  legendItems.forEach(item => {
+    if (item.getAttribute('data-ring') === type) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+
+  const valEl = document.getElementById('activity-center-value');
+  const labelEl = document.getElementById('activity-center-label');
+  if (valEl && labelEl) {
+    valEl.textContent = val;
+    labelEl.textContent = label;
+    valEl.style.transform = 'scale(1.1)';
+    setTimeout(() => { valEl.style.transform = 'scale(1)'; }, 150);
+  }
+}
+
+function resetActivityRings() {
+  const container = document.getElementById('activity-rings-svg-container');
+  if (container) {
+    container.className = 'ring-svg-container';
+  }
+  
+  const legendItems = document.querySelectorAll('.activity-legend-item');
+  legendItems.forEach(item => item.classList.remove('active'));
+
+  const valEl = document.getElementById('activity-center-value');
+  const labelEl = document.getElementById('activity-center-label');
+  if (valEl && labelEl && window.lastTotalSetups !== undefined) {
+    valEl.textContent = window.lastTotalSetups;
+    labelEl.textContent = 'Total Setups';
+  }
+}
+
 // Save Custom Attributes
 function saveCustomAttribute(attrName, val) {
   const entry = entries.find(e => e.id === activeEntryId);
@@ -3761,10 +3945,11 @@ function saveCalculateAttribute(attrName, valStr) {
     
     // Auto-calculate P&L = (Exit Price - Entry Price) * Quantity - Charges
     const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
-    entry.customAttributes['P&L'] = computedPL;
-  } else if (attrName === 'Entry Price' || attrName === 'Exit Price' || attrName === 'Quantity' || attrName === 'Charges') {
-    // If one of the 4 fields is cleared or incomplete, clear P&L
-    entry.customAttributes['P&L'] = '';
+    const roundedPL = Math.round((computedPL + Number.EPSILON) * 100) / 100;
+    const currentPL = entry.customAttributes['P&L'];
+    if (currentPL === '' || currentPL === undefined || currentPL === null || Number(currentPL) === roundedPL) {
+      entry.customAttributes['P&L'] = roundedPL;
+    }
   }
 
   // Always update status based on current P&L
@@ -3828,24 +4013,39 @@ function updateCalculationsRealTime(platform) {
 
   const container = document.getElementById(platform === 'desktop' ? 'desktop-detail-pane' : 'mobile-detail-pane');
 
-  if (ep !== '' && xp !== '' && qty !== '' && chg !== '') {
+  const isEditingPL = (document.activeElement === plEl);
+
+  if (!isEditingPL && ep !== '' && xp !== '' && qty !== '' && chg !== '') {
     const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
-    plEl.value = computedPL;
+    const roundedPL = Math.round((computedPL + Number.EPSILON) * 100) / 100;
+    plEl.value = roundedPL;
     
     if (container) {
       const badge = container.querySelector('.status-passed, .status-failed, .status-missed');
       if (badge) {
-        badge.className = 'tag-badge ' + (computedPL > 0 ? 'status-passed' : 'status-failed');
-        badge.textContent = computedPL > 0 ? 'PASSED' : 'FAILED';
+        badge.className = 'tag-badge ' + (roundedPL > 0 ? 'status-passed' : 'status-failed');
+        badge.textContent = roundedPL > 0 ? 'PASSED' : 'FAILED';
       }
     }
   } else {
-    plEl.value = '';
+    // Keep current P&L value (manual or calculated) and update badge
+    const plValStr = plEl.value;
     if (container) {
       const badge = container.querySelector('.status-passed, .status-failed, .status-missed');
       if (badge) {
-        badge.className = 'tag-badge status-missed';
-        badge.textContent = 'MISSED';
+        if (plValStr !== '') {
+          const plVal = Number(plValStr);
+          if (plVal === 0) {
+            badge.className = 'tag-badge status-missed';
+            badge.textContent = 'MISSED';
+          } else {
+            badge.className = 'tag-badge ' + (plVal > 0 ? 'status-passed' : 'status-failed');
+            badge.textContent = plVal > 0 ? 'PASSED' : 'FAILED';
+          }
+        } else {
+          badge.className = 'tag-badge status-missed';
+          badge.textContent = 'MISSED';
+        }
       }
     }
   }
@@ -3889,6 +4089,9 @@ function saveFromDOM(isManualClick = false) {
       if (inputEl.type === 'number') {
         val = val === '' ? '' : Number(val);
       }
+      if (attrKey === 'P&L' && val !== '') {
+        val = Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+      }
       entry.customAttributes[attrKey] = val;
     });
   } else if (isMobile) {
@@ -3914,11 +4117,14 @@ function saveFromDOM(isManualClick = false) {
       if (inputEl.type === 'number') {
         val = val === '' ? '' : Number(val);
       }
+      if (attrKey === 'P&L' && val !== '') {
+        val = Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+      }
       entry.customAttributes[attrKey] = val;
     });
   }
 
-  // Recalculate P&L if all 4 are filled
+  // Recalculate P&L if all 4 are filled and not manually overridden
   const ep = entry.customAttributes['Entry Price'];
   const xp = entry.customAttributes['Exit Price'];
   const qty = entry.customAttributes['Quantity'];
@@ -3929,7 +4135,13 @@ function saveFromDOM(isManualClick = false) {
       qty !== '' && qty !== undefined && qty !== null &&
       chg !== '' && chg !== undefined && chg !== null) {
     const computedPL = (Number(xp) - Number(ep)) * Number(qty) - Number(chg);
-    entry.customAttributes['P&L'] = computedPL;
+    const roundedPL = Math.round((computedPL + Number.EPSILON) * 100) / 100;
+    
+    // Only overwrite if the current P&L matches computed PL or is empty/null
+    const currentPL = entry.customAttributes['P&L'];
+    if (currentPL === '' || currentPL === undefined || currentPL === null || Number(currentPL) === roundedPL) {
+      entry.customAttributes['P&L'] = roundedPL;
+    }
   }
 
   // Recalculate status
@@ -4806,7 +5018,7 @@ function renderMobileDetail() {
           <option value="Crude Oil">
         </datalist>`;
     } else if (attr.name === 'P&L') {
-      inputHTML = `<input type="number" id="mobile-input-pl" class="input-text" value="${currentVal}" placeholder="0" readonly style="opacity: 0.8; cursor: not-allowed;">`;
+      inputHTML = `<input type="number" id="mobile-input-pl" class="input-text" value="${currentVal}" placeholder="0" oninput="updateCalculationsRealTime('mobile')">`;
     } else if (attr.type === 'select') {
       let optionsHtml = '';
       attr.options.forEach(opt => {

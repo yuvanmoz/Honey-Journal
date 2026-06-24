@@ -2826,6 +2826,178 @@ button, input, select, textarea {
   box-shadow: var(--glass-shadow), 0 8px 20px rgba(0, 0, 0, 0.05);
   border-color: rgba(0, 0, 0, 0.12);
 }
+
+/* --- Concentric Apple Fitness Rings --- */
+.apple-fitness-card {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 20px;
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.05), transparent), var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 22px 24px;
+  box-shadow: var(--glass-shadow);
+  transition: transform var(--ease-smooth), box-shadow var(--ease-smooth), border-color var(--transition-fast);
+  align-items: center;
+  position: relative;
+  overflow: visible;
+}
+[data-theme="light"] .apple-fitness-card {
+  background: radial-gradient(circle at top left, rgba(0, 0, 0, 0.02), transparent), var(--glass-bg);
+}
+.apple-fitness-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: var(--glass-shadow), 0 12px 28px rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+[data-theme="light"] .apple-fitness-card:hover {
+  box-shadow: var(--glass-shadow), 0 8px 20px rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.ring-svg-container {
+  width: 140px;
+  height: 140px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-center-readout {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  width: 100%;
+}
+
+.ring-center-value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1.1;
+  color: var(--text-main);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.ring-center-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+  transition: color 0.2s ease;
+}
+
+.fitness-ring-bg {
+  fill: none;
+  opacity: 0.15;
+}
+[data-theme="light"] .fitness-ring-bg {
+  opacity: 0.08;
+}
+
+.fitness-ring-fg {
+  fill: none;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast), stroke-width var(--transition-fast);
+}
+
+.fitness-ring-interactive {
+  cursor: pointer;
+}
+.fitness-ring-interactive:hover {
+  stroke-width: 14px;
+}
+
+/* Legend Styling */
+.ring-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ring-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+[data-theme="light"] .ring-legend-item {
+  background: rgba(0, 0, 0, 0.01);
+  border-color: rgba(0, 0, 0, 0.03);
+}
+
+.ring-legend-item:hover, .ring-legend-item.active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+}
+[data-theme="light"] .ring-legend-item:hover, [data-theme="light"] .ring-legend-item.active {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.ring-legend-left {
+  display: flex;
+  align-items: center;
+}
+
+.ring-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.ring-legend-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ring-legend-val {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Interactive Ring Highlight States */
+.ring-svg-container.focus-win .ring-active { opacity: 0.15; }
+.ring-svg-container.focus-win .ring-win { opacity: 1; stroke-width: 14px; }
+
+.ring-svg-container.focus-green .ring-active { opacity: 0.15; }
+.ring-svg-container.focus-green .ring-green { opacity: 1; stroke-width: 14px; }
+
+.ring-svg-container.focus-active .ring-active { opacity: 0.15; }
+.ring-svg-container.focus-active .ring-active-days { opacity: 1; stroke-width: 14px; }
+
+/* Interactive Ring Highlight States for Trade Activity */
+.ring-svg-container.focus-total .ring-active { opacity: 0.15; }
+.ring-svg-container.focus-total .ring-total { opacity: 1; stroke-width: 14px; }
+
+.ring-svg-container.focus-executed .ring-active { opacity: 0.15; }
+.ring-svg-container.focus-executed .ring-executed { opacity: 1; stroke-width: 14px; }
+
+.ring-svg-container.focus-passed .ring-active { opacity: 0.15; }
+.ring-svg-container.focus-passed .ring-passed { opacity: 1; stroke-width: 14px; }
 .apple-metric-label {
   font-size: 11px;
   font-weight: 600;
