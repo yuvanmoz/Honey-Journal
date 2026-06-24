@@ -2512,7 +2512,7 @@ function renderJournalStatsTab(isMobile = false) {
   const activityHtml = `
     <div class="stats-section-title">Trade Activity</div>
     <div style="margin-bottom: ${isMobile ? '16px' : '24px'}; display: flex; justify-content: flex-start;">
-      <div class="apple-fitness-card" style="grid-template-columns: 140px 1fr; max-width: 440px; width: 100%; box-sizing: border-box; padding: 16px 20px;">
+      <div class="apple-fitness-card" style="max-width: 440px; width: 100%; box-sizing: border-box; padding: 16px 20px;">
         <div class="ring-svg-container" id="activity-rings-svg-container">
           <svg width="130" height="130" viewBox="0 0 140 140">
             <!-- Total Logged (Outer) -->

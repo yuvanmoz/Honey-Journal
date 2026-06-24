@@ -2857,6 +2857,23 @@ button, input, select, textarea {
   border-color: rgba(0, 0, 0, 0.12);
 }
 
+@media (max-width: 600px) {
+  .apple-fitness-card {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 16px;
+  }
+  .ring-legend {
+    width: 100%;
+  }
+  .apple-dashboard-grid {
+    grid-template-columns: 1fr !important;
+    padding: 12px 16px !important;
+  }
+}
+
 .ring-svg-container {
   width: 140px;
   height: 140px;
