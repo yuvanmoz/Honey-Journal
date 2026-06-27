@@ -50,7 +50,7 @@ let currentStatsTab = 'setup';
 let currentEquityPeriod = 'all';
 let statsCalendarYear = new Date().getFullYear();
 let statsCalendarMonth = new Date().getMonth();
-let currentStatsPeriod = 'monthly';
+let currentStatsPeriod = 'daily';
 let statsSelectedDate = null;
 let editingTagName = null;
 
@@ -939,11 +939,7 @@ function renderAll() {
   // Check path setup (do not render list counts if missing folder)
   if (!storagePath) return;
 
-  // Sync filter selectors list values
-  syncFilterSelectors();
-  
-  // Populate filter dropdown patterns
-  populatePatternFilterDropdowns();
+
 
   // Render Desktop Elements
   renderDesktopSidebar();
@@ -978,58 +974,7 @@ function renderDetailOnly() {
   renderMobileDetail();
 }
 
-// Sync filter selections between desktop and mobile variables
-function syncFilterSelectors() {
-  const dBias = document.getElementById('desktop-filter-bias');
-  const dPattern = document.getElementById('desktop-filter-pattern');
-  const dSort = document.getElementById('desktop-sort-gallery');
 
-  const mBias = document.getElementById('mobile-filter-bias');
-  const mPattern = document.getElementById('mobile-filter-pattern');
-  const mSort = document.getElementById('mobile-sort');
-
-  if (dBias) dBias.value = filterBias;
-  if (dPattern) dPattern.value = filterPattern;
-  if (dSort) dSort.value = sortOrder;
-
-  if (mBias) {
-    mBias.value = filterBias;
-    mBias.classList.toggle('active-filter', filterBias !== 'all');
-  }
-  if (mPattern) {
-    mPattern.value = filterPattern;
-    mPattern.classList.toggle('active-filter', filterPattern !== 'all');
-  }
-  if (mSort) {
-    mSort.value = sortOrder;
-    mSort.classList.toggle('active-filter', sortOrder !== 'newest');
-  }
-}
-
-// Populate pattern dropdown options dynamically
-function populatePatternFilterDropdowns() {
-  const dPattern = document.getElementById('desktop-filter-pattern');
-  const mPattern = document.getElementById('mobile-filter-pattern');
-
-  if (!dPattern || !mPattern) return;
-
-  const currentDValue = dPattern.value;
-  const currentMValue = mPattern.value;
-
-  dPattern.innerHTML = '<option value="all">All Patterns</option>';
-  mPattern.innerHTML = '<option value="all">All Patterns</option>';
-
-  tags.forEach(tag => {
-    dPattern.innerHTML += `<option value="${tag.name}">${tag.name}</option>`;
-    mPattern.innerHTML += `<option value="${tag.name}">${tag.name}</option>`;
-  });
-
-  // Preserve selections
-  dPattern.value = currentDValue || 'all';
-  mPattern.value = currentMValue || 'all';
-
-  setupAppleDropdowns();
-}
 
 // Dynamic Custom Apple Select Dropdowns
 function setupAppleDropdowns() {
@@ -1129,7 +1074,7 @@ function updateAppleDropdown(select) {
 
 // Global click listener to dismiss custom select menus on outside clicks
 document.addEventListener('click', () => {
-  document.querySelectorAll('.apple-dropdown-menu.open').forEach(menu => {
+  document.querySelectorAll('.apple-dropdown-menu.open, .custom-sort-menu.open').forEach(menu => {
     menu.classList.remove('open');
   });
 });
@@ -1143,8 +1088,7 @@ function switchDesktopView(view) {
   
   const titleEl = document.getElementById('desktop-view-title');
   const tabsContainer = document.getElementById('desktop-tabs-container');
-  const filtersGroup = document.getElementById('desktop-filters-group');
-  const searchWrapper = document.getElementById('desktop-search-wrapper');
+  const sortDropdown = document.getElementById('desktop-sort-dropdown-container');
   const newBtn = document.querySelector('#desktop-header-controls .btn-primary');
   
   const galleryView = document.getElementById('desktop-gallery-view');
@@ -1156,8 +1100,7 @@ function switchDesktopView(view) {
   // Hide header actions on dashboard/calendar/statistics/settings views to prevent clutter
   const isPatternsView = (view === 'patterns');
   if (tabsContainer) tabsContainer.style.display = isPatternsView ? 'flex' : 'none';
-  if (filtersGroup) filtersGroup.style.display = isPatternsView ? 'flex' : 'none';
-  if (searchWrapper) searchWrapper.style.display = isPatternsView ? 'flex' : 'none';
+  if (sortDropdown) sortDropdown.style.display = isPatternsView ? 'inline-block' : 'none';
   if (newBtn) newBtn.style.display = isPatternsView ? 'flex' : 'none';
 
   // Hide all screens
@@ -1179,8 +1122,6 @@ function switchDesktopView(view) {
   titleEl.textContent = view.charAt(0).toUpperCase() + view.slice(1);
 
   if (view === 'patterns') {
-    populatePatternFilterDropdowns();
-    syncFilterSelectors();
     if (desktopLayout === 'gallery') {
       galleryView.style.display = 'grid';
     } else {
@@ -1213,28 +1154,30 @@ function renderDesktopSidebar() {
   });
 }
 
-// Simple dropdown filters event handler
-function handleFilterChange() {
-  const dFieldBias = document.getElementById('desktop-filter-bias');
-  const dFieldPattern = document.getElementById('desktop-filter-pattern');
-  const mFieldBias = document.getElementById('mobile-filter-bias');
-  const mFieldPattern = document.getElementById('mobile-filter-pattern');
+// Custom Sort Dropdown Handler
+function toggleSortMenu(device, event) {
+  if (event) event.stopPropagation();
+  const menuId = device === 'desktop' ? 'desktop-sort-menu' : 'mobile-sort-menu';
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
 
-  // Find which dropdown triggered change and synchronize selections
-  if (document.activeElement === dFieldBias || document.activeElement === dFieldPattern) {
-    filterBias = dFieldBias.value;
-    filterPattern = dFieldPattern.value;
-  } else if (document.activeElement === mFieldBias || document.activeElement === mFieldPattern) {
-    filterBias = mFieldBias.value;
-    filterPattern = mFieldPattern.value;
-  }
+  // Close any other open menus
+  document.querySelectorAll('.custom-sort-menu, .apple-dropdown-menu').forEach(openMenu => {
+    if (openMenu !== menu) openMenu.classList.remove('open');
+  });
 
-  activeCalendarDate = null; // Clear calendar dates selection on generic filter search
-  renderAll();
+  menu.classList.toggle('open');
 }
 
-function handleSortChange(val) {
+function selectSortOption(val, device) {
   sortOrder = val;
+
+  // Update active class in both menus
+  document.querySelectorAll('#desktop-sort-menu .custom-sort-item, #mobile-sort-menu .custom-sort-item').forEach(item => {
+    const isVal = item.getAttribute('data-value') === val;
+    item.classList.toggle('active', isVal);
+  });
+
   renderAll();
 }
 
@@ -1258,38 +1201,13 @@ function setDesktopLayout(layout) {
   renderDesktopContent();
 }
 
-function handleDesktopSearch() {
-  desktopSearchText = document.getElementById('desktop-search').value.toLowerCase();
-  renderDesktopContent();
-}
-
 // Clean filtering logic based on simplified attributes
-function getProcessedEntries(searchText, calendarDate = null) {
+function getProcessedEntries(searchText = null, calendarDate = null) {
   let list = [...entries];
 
   // Apply Calendar Date filter if selected
   if (calendarDate) {
     list = list.filter(e => e.date === calendarDate);
-  }
-
-  // Filter by Bias Select dropdown
-  if (filterBias !== 'all') {
-    list = list.filter(e => e.bias === filterBias);
-  }
-
-  // Filter by Pattern Select dropdown
-  if (filterPattern !== 'all') {
-    list = list.filter(e => e.patterns.includes(filterPattern));
-  }
-
-  // Apply Search input matching (search patterns, notes, mistakes, bias)
-  if (searchText) {
-    list = list.filter(e => 
-      (e.patterns && e.patterns.join(' ').toLowerCase().includes(searchText)) ||
-      (e.notes && e.notes.toLowerCase().includes(searchText)) ||
-      (e.mistakes && e.mistakes.toLowerCase().includes(searchText)) ||
-      (e.bias && e.bias.toLowerCase().includes(searchText))
-    );
   }
 
   // Apply Sort
@@ -1307,7 +1225,7 @@ function getProcessedEntries(searchText, calendarDate = null) {
 }
 
 function renderDesktopContent() {
-  const processedList = getProcessedEntries(desktopSearchText, activeCalendarDate);
+  const processedList = getProcessedEntries(null, activeCalendarDate);
   
   if (desktopLayout === 'gallery') {
     renderDesktopGallery(processedList);
@@ -2036,13 +1954,18 @@ function switchStatsTab(tab) {
 }
 
 function changeStatsCalendarMonth(offset) {
-  statsCalendarMonth += offset;
-  if (statsCalendarMonth < 0) {
-    statsCalendarMonth = 11;
-    statsCalendarYear--;
-  } else if (statsCalendarMonth > 11) {
-    statsCalendarMonth = 0;
-    statsCalendarYear++;
+  if (currentStatsPeriod === 'daily') {
+    statsCalendarMonth += offset;
+    if (statsCalendarMonth < 0) {
+      statsCalendarMonth = 11;
+      statsCalendarYear--;
+    } else if (statsCalendarMonth > 11) {
+      statsCalendarMonth = 0;
+      statsCalendarYear++;
+    }
+  } else if (currentStatsPeriod !== 'yearly') {
+    // monthly, quarterly
+    statsCalendarYear += offset;
   }
   
   const desktopCal = document.getElementById('desktop-stats-calendar-wrapper');
@@ -2053,7 +1976,7 @@ function changeStatsCalendarMonth(offset) {
 
   const defaultDetail = `
     <div class="stats-day-detail" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
-      Click any date on the calendar to view trade details here.
+      Click any cell on the calendar to view trade details here.
     </div>
   `;
   const desktopDetail = document.getElementById('desktop-stats-day-detail-wrapper');
@@ -2062,48 +1985,175 @@ function changeStatsCalendarMonth(offset) {
   if (mobileDetail) mobileDetail.innerHTML = defaultDetail;
 }
 
-function selectStatsCalendarDate(dateStr) {
-  statsSelectedDate = dateStr;
+// Helper to get week number representation
+function getEntryWeekStr(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const yStr = dateStr.slice(0, 4);
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const pastDaysOfYear = (d - startOfYear) / 86400000;
+  const wNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+  return `${yStr}-W${String(wNum).padStart(2, '0')}`;
+}
 
-  document.querySelectorAll('.stats-cal-cell').forEach(cell => {
-    cell.classList.remove('selected');
-    if (cell.getAttribute('data-date') === dateStr) {
-      cell.classList.add('selected');
+// Helper to get month name
+function getMonthName(monthStr) {
+  const parts = monthStr.split('-');
+  if (parts.length === 2) {
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    return `${monthNames[monthIndex]} ${parts[0]}`;
+  }
+  return monthStr;
+}
+
+function switchCalendarPeriod(period) {
+  currentStatsPeriod = period;
+  
+  // Re-render the calendar components
+  const wrapperD = document.getElementById('desktop-stats-calendar-wrapper');
+  if (wrapperD) wrapperD.innerHTML = generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth);
+  const wrapperM = document.getElementById('mobile-stats-calendar-wrapper');
+  if (wrapperM) wrapperM.innerHTML = generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth);
+
+  // Reset detail wrappers
+  const defaultDetail = `
+    <div class="stats-day-detail" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+      Click any cell on the calendar to view trade details here.
+    </div>
+  `;
+  const desktopDetail = document.getElementById('desktop-stats-day-detail-wrapper');
+  const mobileDetail = document.getElementById('mobile-stats-day-detail-wrapper');
+  if (desktopDetail) desktopDetail.innerHTML = defaultDetail;
+  if (mobileDetail) mobileDetail.innerHTML = defaultDetail;
+}
+
+function selectStatsCalendarPeriod(period, key) {
+  statsSelectedDate = key;
+  currentStatsPeriod = period;
+
+  // Re-render calendar so selection outline is updated
+  const wrapperD = document.getElementById('desktop-stats-calendar-wrapper');
+  if (wrapperD) wrapperD.innerHTML = generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth);
+  const wrapperM = document.getElementById('mobile-stats-calendar-wrapper');
+  if (wrapperM) wrapperM.innerHTML = generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth);
+
+  let periodEntries = [];
+  let headerTitle = '';
+  let isDetailed = true;
+
+  if (period === 'daily') {
+    periodEntries = entries.filter(e => e.date === key);
+    headerTitle = `Entries on ${key}`;
+  } else if (period === 'weekly') {
+    periodEntries = entries.filter(e => getEntryWeekStr(e.date) === key);
+    const wkNum = key.includes('-W') ? key.split('-W')[1] : key;
+    headerTitle = `Week ${wkNum} (${key.slice(0, 4)}) Trades`;
+  } else {
+    isDetailed = false;
+    if (period === 'monthly') {
+      periodEntries = entries.filter(e => e.date.slice(0, 7) === key);
+      headerTitle = `${getMonthName(key)} Summary`;
+    } else if (period === 'quarterly') {
+      periodEntries = entries.filter(e => {
+        const d = new Date(e.date);
+        if (isNaN(d.getTime())) return false;
+        const yStr = e.date.slice(0, 4);
+        const q = Math.ceil((d.getMonth() + 1) / 3);
+        return `${yStr}-Q${q}` === key;
+      });
+      const qNum = key.includes('-Q') ? key.split('-Q')[1] : key;
+      headerTitle = `Quarter ${qNum} (${key.slice(0, 4)}) Summary`;
+    } else if (period === 'yearly') {
+      periodEntries = entries.filter(e => e.date.slice(0, 4) === key);
+      headerTitle = `Year ${key} Summary`;
     }
-  });
+  }
 
-  const dayEntries = entries.filter(e => e.date === dateStr);
   const getDetailHTML = () => {
-    if (dayEntries.length === 0) {
+    if (periodEntries.length === 0) {
       return `
         <div class="stats-day-detail">
-          <div style="font-size:13px; color:var(--text-muted); text-align:center;">No entries for ${dateStr}</div>
+          <div style="font-size:13px; color:var(--text-muted); text-align:center;">No entries for this period</div>
+        </div>
+      `;
+    }
+
+    if (!isDetailed) {
+      let periodPL = 0;
+      let passedCount = 0;
+      let failedCount = 0;
+      let missedCount = 0;
+      let executedCount = 0;
+
+      periodEntries.forEach(entry => {
+        if (entry.status === 'PASSED' || entry.status === 'FAILED') {
+          const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+          periodPL += typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+          executedCount++;
+          if (entry.status === 'PASSED') passedCount++;
+          else failedCount++;
+        } else {
+          missedCount++;
+        }
+      });
+
+      const winRate = executedCount > 0 ? (passedCount / executedCount) * 100 : 0;
+      const plClass = periodPL >= 0 ? 'bull' : 'bear';
+
+      return `
+        <div class="stats-day-detail" style="display:flex; flex-direction:column; gap:12px;">
+          <div style="font-size:12px; font-weight:600; color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+            ${headerTitle}
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">Net P&L</span>
+              <span class="${plClass}" style="font-size:14px; font-weight:800; font-family:var(--font-display);">₹${periodPL >= 0 ? '+' : ''}${periodPL.toLocaleString()}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid rgba(255,255,255,0.02); padding-top:8px;">
+              <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">Trades Logged</span>
+              <span style="font-size:12px; font-weight:700; color:var(--text-main); font-family:var(--font-display);">${periodEntries.length} total</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid rgba(255,255,255,0.02); padding-top:8px;">
+              <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">Win Rate</span>
+              <span class="bull" style="font-size:12px; font-weight:700; font-family:var(--font-display);">${winRate.toFixed(1)}%</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid rgba(255,255,255,0.02); padding-top:8px;">
+              <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">Executed vs Missed</span>
+              <span style="font-size:11px; color:var(--text-main); font-weight:600;">${executedCount} Executed / ${missedCount} Missed</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid rgba(255,255,255,0.02); padding-top:8px;">
+              <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">Win / Loss Ratio</span>
+              <span style="font-size:11px; color:var(--text-main); font-weight:600;"><span class="bull">${passedCount} Wins</span> / <span class="bear">${failedCount} Losses</span></span>
+            </div>
+          </div>
         </div>
       `;
     }
 
     let html = `
-      <div class="stats-day-detail">
-        <div style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
-          Entries on ${dateStr}
+      <div class="stats-day-detail" style="display: flex; flex-direction: column; max-height: 380px;">
+        <div style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px; flex-shrink: 0;">
+          ${headerTitle}
         </div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex-grow:1; padding-right:2px; max-height: 300px;">
     `;
 
-    dayEntries.forEach(entry => {
+    periodEntries.forEach(entry => {
       const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
       const plValue = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
       const statusClass = entry.status === 'PASSED' ? 'status-passed' : (entry.status === 'MISSED' ? 'status-missed' : 'status-failed');
       
       html += `
-        <div class="stats-day-entry-row" onclick="openEntryDetail('${entry.id}')">
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <div style="font-size:13px; font-weight:600; color:var(--text-main);">${getDisplayName(entry)}</div>
-            <div style="font-size:11px; color:var(--text-muted);">${entry.patterns.join(', ') || 'No patterns'}</div>
+        <div class="stats-day-entry-row" onclick="openEntryDetail('${entry.id}')" style="cursor:pointer;">
+          <div style="display:flex; flex-direction:column; gap:3px; max-width: 65%;">
+            <div style="font-size:13px; font-weight:600; color:var(--text-main); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${getDisplayName(entry)}">${getDisplayName(entry)}</div>
+            <div style="font-size:11px; color:var(--text-muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${entry.patterns.join(', ') || 'No patterns'}">${entry.patterns.join(', ') || 'No patterns'}</div>
           </div>
           <div style="text-align:right;">
             <div style="font-size:13px; font-weight:700;" class="${plValue >= 0 ? 'bull' : 'bear'}">
-              ₹${plValue >= 0 ? '+' : ''}${plValue}
+              ₹${plValue >= 0 ? '+' : ''}${plValue.toLocaleString()}
             </div>
             <span class="${statusClass}" style="font-size:10px; font-weight:700;">${entry.status}</span>
           </div>
@@ -2126,171 +2176,284 @@ function selectStatsCalendarDate(dateStr) {
   if (mobileDetail) mobileDetail.innerHTML = detailHTML;
 }
 
-function switchStatsPeriod(period) {
-  currentStatsPeriod = period;
-  const stats = calculateJournalStats();
-  
-  const dTable = document.getElementById('desktop-pnl-timeline-table-wrapper');
-  if (dTable) {
-    dTable.innerHTML = generatePLTimelineTableHTML(stats, period);
-  }
-  const mTable = document.getElementById('mobile-pnl-timeline-table-wrapper');
-  if (mTable) {
-    mTable.innerHTML = generatePLTimelineTableHTML(stats, period);
-  }
-
-  // Update active classes for timeline period buttons
-  const timelineSelectors = document.querySelectorAll('.timeline-period-selector .period-btn');
-  timelineSelectors.forEach(btn => {
-    btn.classList.remove('active');
-    if (btn.getAttribute('data-period') === period) {
-      btn.classList.add('active');
-    }
-  });
+// Backward compatibility wrapper
+function selectStatsCalendarDate(dateStr) {
+  selectStatsCalendarPeriod('daily', dateStr);
 }
 
 function generateStatsCalendarHTML(year, month) {
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const firstDay = new Date(year, month, 1).getDay();
-  const numDays = new Date(year, month + 1, 0).getDate();
-
-  let html = `
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-      <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(-1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-left" style="font-size:11px;"></i></button>
-      <div style="font-family:var(--font-display); font-size:14px; font-weight:700; color:var(--text-main);">${monthNames[month]} ${year}</div>
-      <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-right" style="font-size:11px;"></i></button>
-    </div>
-    <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; text-align:center; font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
-      <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
-    </div>
-    <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:6px;">
-  `;
-
-  for (let i = 0; i < firstDay; i++) {
-    html += `<div style="aspect-ratio:1; border-radius:8px; border: 1px solid transparent;"></div>`;
-  }
-
-  for (let day = 1; day <= numDays; day++) {
-    const curMonthStr = String(month + 1).padStart(2, '0');
-    const curDayStr = String(day).padStart(2, '0');
-    const dateStr = `${year}-${curMonthStr}-${curDayStr}`;
-
-    const dayEntries = entries.filter(e => e.date === dateStr);
-    let cellClass = 'stats-cal-cell-empty';
-    let cellStyle = 'aspect-ratio:1; border-radius:8px; border:1px solid rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:12px; font-weight:600; position:relative;';
-
-    if (dayEntries.length > 0) {
-      const executed = dayEntries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
-      const missed = dayEntries.filter(e => e.status === 'MISSED');
-      
-      let dailyPL = 0;
-      executed.forEach(entry => {
-        const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
-        dailyPL += typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
-      });
-
-      if (executed.length > 0) {
-        if (dailyPL > 0) {
-          cellClass = 'stats-cal-cell-profit';
-        } else if (dailyPL < 0) {
-          cellClass = 'stats-cal-cell-loss';
-        } else {
-          cellClass = 'stats-cal-cell-profit';
-        }
-      } else if (missed.length > 0) {
-        cellClass = 'stats-cal-cell-missed';
-      }
-    }
-
-    const isSelected = statsSelectedDate === dateStr ? 'selected' : '';
-
-    html += `
-      <div class="stats-cal-cell ${cellClass} ${isSelected}" data-date="${dateStr}" onclick="selectStatsCalendarDate('${dateStr}')" style="${cellStyle}">
-        ${day}
+  const stats = calculateJournalStats();
+  
+  // Render Mode Selector and Navigation
+  let navHtml = '';
+  if (currentStatsPeriod === 'daily' || currentStatsPeriod === 'weekly') {
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    navHtml = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(-1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-left" style="font-size:11px;"></i></button>
+        <div style="font-family:var(--font-display); font-size:14px; font-weight:700; color:var(--text-main); min-width:100px; text-align:center;">${monthNames[month]} ${year}</div>
+        <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-right" style="font-size:11px;"></i></button>
+      </div>
+    `;
+  } else if (currentStatsPeriod === 'yearly') {
+    navHtml = `<div style="font-family:var(--font-display); font-size:14px; font-weight:700; color:var(--text-main);">All Years</div>`;
+  } else {
+    // monthly, quarterly
+    navHtml = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(-1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-left" style="font-size:11px;"></i></button>
+        <div style="font-family:var(--font-display); font-size:14px; font-weight:700; color:var(--text-main); min-width:80px; text-align:center;">Year ${year}</div>
+        <button class="btn-icon-sm" onclick="changeStatsCalendarMonth(1)" style="border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer;"><i class="fa-solid fa-chevron-right" style="font-size:11px;"></i></button>
       </div>
     `;
   }
 
-  html += `
+  const pModes = ['daily', 'monthly', 'quarterly', 'yearly'];
+  let modeSelector = `<div class="calendar-period-control">`;
+  pModes.forEach(p => {
+    const activeClass = (currentStatsPeriod === p || (p === 'daily' && currentStatsPeriod === 'weekly')) ? 'active' : '';
+    modeSelector += `<button class="calendar-period-btn ${activeClass}" onclick="switchCalendarPeriod('${p}')">${p.toUpperCase()}</button>`;
+  });
+  modeSelector += `</div>`;
+
+  let bodyHtml = '';
+  if (currentStatsPeriod === 'daily' || currentStatsPeriod === 'weekly') {
+    bodyHtml = generateDailyCalendarHTML(year, month, stats);
+  } else if (currentStatsPeriod === 'monthly') {
+    bodyHtml = generateMonthlyCalendarHTML(year, stats);
+  } else if (currentStatsPeriod === 'quarterly') {
+    bodyHtml = generateQuarterlyCalendarHTML(year, stats);
+  } else if (currentStatsPeriod === 'yearly') {
+    bodyHtml = generateYearlyCalendarHTML(stats);
+  }
+
+  return `
+    <div class="calendar-mode-header">
+      ${modeSelector}
+      ${navHtml}
+    </div>
+    <div style="margin-top:16px;">
+      ${bodyHtml}
     </div>
   `;
+}
 
+function generateDailyCalendarHTML(year, month, stats) {
+  const firstDay = new Date(year, month, 1).getDay();
+  const numDays = new Date(year, month + 1, 0).getDate();
+
+  let html = `
+    <div style="display:grid; grid-template-columns: repeat(8, 1fr); gap:6px; text-align:center; font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom:6px;">
+      <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+      <div style="border-left:1px dashed var(--glass-border); padding-left:4px; color:var(--text-main);">Wk</div>
+    </div>
+    <div class="stats-cal-grid-8">
+  `;
+
+  const weeks = [];
+  let currentWeek = [];
+  
+  for (let i = 0; i < firstDay; i++) {
+    currentWeek.push(null);
+  }
+  
+  for (let day = 1; day <= numDays; day++) {
+    currentWeek.push(day);
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+  
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) {
+      currentWeek.push(null);
+    }
+    weeks.push(currentWeek);
+  }
+
+  weeks.forEach(week => {
+    let weekPL = 0;
+    let weekTradeCount = 0;
+    let hasWeekTrades = false;
+
+    // Render day cells
+    week.forEach(day => {
+      if (day === null) {
+        html += `<div style="aspect-ratio:1; border-radius:8px; border: 1px solid transparent;"></div>`;
+      } else {
+        const curMonthStr = String(month + 1).padStart(2, '0');
+        const curDayStr = String(day).padStart(2, '0');
+        const dateStr = `${year}-${curMonthStr}-${curDayStr}`;
+
+        const dayEntries = entries.filter(e => e.date === dateStr);
+        let cellClass = 'stats-cal-cell-empty';
+        let plHtml = '';
+        let dailyPL = 0;
+        let dayTradeCount = 0;
+
+        if (dayEntries.length > 0) {
+          const executed = dayEntries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
+          const missed = dayEntries.filter(e => e.status === 'MISSED');
+          
+          executed.forEach(entry => {
+            const plRaw = entry.customAttributes ? entry.customAttributes['P&L'] : 0;
+            dailyPL += typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+            dayTradeCount++;
+          });
+
+          if (executed.length > 0) {
+            hasWeekTrades = true;
+            weekPL += dailyPL;
+            weekTradeCount += dayTradeCount;
+
+            const formattedPL = dailyPL >= 0 ? `+₹${Math.round(dailyPL).toLocaleString()}` : `-₹${Math.round(Math.abs(dailyPL)).toLocaleString()}`;
+            plHtml = `<span class="stats-cal-cell-pl ${dailyPL >= 0 ? 'bull' : 'bear'}" style="font-size: 7.5px;">${formattedPL}</span>`;
+            cellClass = dailyPL >= 0 ? 'stats-cal-cell-profit' : 'stats-cal-cell-loss';
+          } else if (missed.length > 0) {
+            cellClass = 'stats-cal-cell-missed';
+          }
+        }
+
+        const isSelected = statsSelectedDate === dateStr && currentStatsPeriod === 'daily' ? 'selected' : '';
+
+        html += `
+          <div class="stats-cal-cell ${cellClass} ${isSelected}" data-date="${dateStr}" onclick="selectStatsCalendarPeriod('daily', '${dateStr}')">
+            <span class="stats-cal-cell-daynum">${day}</span>
+            ${plHtml}
+          </div>
+        `;
+      }
+    });
+
+    // Render week summary cell (8th column)
+    const firstActiveDay = week.find(d => d !== null);
+    const curMonthStr = String(month + 1).padStart(2, '0');
+    const firstDateStr = `${year}-${curMonthStr}-${String(firstActiveDay).padStart(2, '0')}`;
+    const weekKey = getEntryWeekStr(firstDateStr);
+    const isSelected = statsSelectedDate === weekKey && currentStatsPeriod === 'weekly' ? 'selected' : '';
+
+    if (hasWeekTrades) {
+      const formattedWkPL = weekPL >= 0 ? `+₹${Math.round(weekPL).toLocaleString()}` : `-₹${Math.round(Math.abs(weekPL)).toLocaleString()}`;
+      const wkClass = weekPL >= 0 ? 'profit' : 'loss';
+      html += `
+        <div class="stats-cal-cell stats-cal-cell-wk ${wkClass} ${isSelected}" onclick="selectStatsCalendarPeriod('weekly', '${weekKey}')" title="Weekly P&L (${weekTradeCount} trades)">
+          <span style="font-size: 8.5px; font-weight: 700;">${formattedWkPL}</span>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="stats-cal-cell stats-cal-cell-wk ${isSelected}" onclick="selectStatsCalendarPeriod('weekly', '${weekKey}')" title="No trades this week">
+          <span style="font-size: 9px; color: var(--text-muted);">-</span>
+        </div>
+      `;
+    }
+  });
+
+  html += `</div>`;
   return html;
 }
 
-function generatePLTimelineTableHTML(stats, period) {
-  let dataObj = {};
-  let tradeCounts = {};
-  if (period === 'daily') {
-    dataObj = stats.byDate;
-    tradeCounts = {};
-    entries.forEach(e => {
-      if (e.status === 'PASSED' || e.status === 'FAILED') {
-        tradeCounts[e.date] = (tradeCounts[e.date] || 0) + 1;
-      }
-    });
-  } else if (period === 'weekly') {
-    dataObj = stats.byWeek;
-    tradeCounts = stats.weekTradeCount;
-  } else if (period === 'monthly') {
-    dataObj = stats.byMonth;
-    tradeCounts = stats.monthTradeCount;
-  } else if (period === 'quarterly') {
-    dataObj = stats.byQuarter;
-    tradeCounts = stats.quarterTradeCount;
-  } else if (period === 'yearly') {
-    dataObj = stats.byYear;
-    tradeCounts = stats.yearTradeCount;
+function generateMonthlyCalendarHTML(year, stats) {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  let html = `<div class="stats-cal-grid-12">`;
+
+  for (let m = 0; m < 12; m++) {
+    const mStr = String(m + 1).padStart(2, '0');
+    const key = `${year}-${mStr}`;
+
+    const pl = stats.byMonth[key] || 0;
+    const count = stats.monthTradeCount[key] || 0;
+    const isSelected = statsSelectedDate === key && currentStatsPeriod === 'monthly' ? 'selected' : '';
+
+    let plHtml = `<span style="color:var(--text-muted); font-size:11px;">No trades</span>`;
+    if (count > 0) {
+      const formattedPL = pl >= 0 ? `+₹${Math.round(pl).toLocaleString()}` : `-₹${Math.round(Math.abs(pl)).toLocaleString()}`;
+      const plClass = pl >= 0 ? 'bull' : 'bear';
+      plHtml = `<span class="stats-cal-period-pl ${plClass}">${formattedPL}</span>`;
+    }
+
+    html += `
+      <div class="stats-cal-period-cell ${isSelected}" onclick="selectStatsCalendarPeriod('monthly', '${key}')">
+        <div class="stats-cal-period-title">${monthNames[m]}</div>
+        <div class="stats-cal-period-sub">${count} trades</div>
+        ${plHtml}
+      </div>
+    `;
   }
 
-  const sortedKeys = Object.keys(dataObj).sort().reverse();
-  const values = Object.values(dataObj);
-  const maxPl = values.length > 0 ? Math.max(...values.map(Math.abs)) : 1;
+  html += `</div>`;
+  return html;
+}
 
-  let html = `
-    <table class="pnl-timeline-table">
-      <thead>
-        <tr>
-          <th>Period</th>
-          <th>Trades</th>
-          <th style="text-align:right;">P&L</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+function generateQuarterlyCalendarHTML(year, stats) {
+  const quarters = [
+    { num: 1, label: 'Q1', months: 'Jan - Mar' },
+    { num: 2, label: 'Q2', months: 'Apr - Jun' },
+    { num: 3, label: 'Q3', months: 'Jul - Sep' },
+    { num: 4, label: 'Q4', months: 'Oct - Dec' }
+  ];
 
-  if (sortedKeys.length === 0) {
-    html += `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">No trading activity logged.</td></tr>`;
-  } else {
-    sortedKeys.forEach(key => {
-      const pl = dataObj[key];
-      const count = tradeCounts[key] || 0;
-      const pct = maxPl > 0 ? (Math.abs(pl) / maxPl * 100) : 0;
-      const rowClass = pl >= 0 ? 'pnl-row-profit' : 'pnl-row-loss';
-      const barColor = pl >= 0 ? 'var(--color-bull)' : 'var(--color-bear)';
-      
-      html += `
-        <tr class="${rowClass}">
-          <td style="font-weight:600;">${key}</td>
-          <td>${count} trades</td>
-          <td style="text-align:right;">
-            <div style="display:inline-flex; flex-direction:column; align-items:flex-end; gap:3px;">
-              <span style="font-weight:700;">₹${pl >= 0 ? '+' : ''}${pl.toLocaleString()}</span>
-              <div style="width:60px; height:3px; background:rgba(255,255,255,0.06); border-radius:2.5px; overflow:hidden;">
-                <div style="width:${pct}%; height:100%; background:${barColor};"></div>
-              </div>
-            </div>
-          </td>
-        </tr>
-      `;
-    });
+  let html = `<div class="stats-cal-grid-4">`;
+
+  quarters.forEach(q => {
+    const key = `${year}-Q${q.num}`;
+    const pl = stats.byQuarter[key] || 0;
+    const count = stats.quarterTradeCount[key] || 0;
+    const isSelected = statsSelectedDate === key && currentStatsPeriod === 'quarterly' ? 'selected' : '';
+
+    let plHtml = `<span style="color:var(--text-muted); font-size:11px;">No trades</span>`;
+    if (count > 0) {
+      const formattedPL = pl >= 0 ? `+₹${Math.round(pl).toLocaleString()}` : `-₹${Math.round(Math.abs(pl)).toLocaleString()}`;
+      const plClass = pl >= 0 ? 'bull' : 'bear';
+      plHtml = `<span class="stats-cal-period-pl ${plClass}">${formattedPL}</span>`;
+    }
+
+    html += `
+      <div class="stats-cal-period-cell ${isSelected}" onclick="selectStatsCalendarPeriod('quarterly', '${key}')">
+        <div class="stats-cal-period-title">${q.label} <span style="font-size:10px; font-weight:normal; color:var(--text-muted); margin-left:4px;">(${q.months})</span></div>
+        <div class="stats-cal-period-sub">${count} trades</div>
+        ${plHtml}
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  return html;
+}
+
+function generateYearlyCalendarHTML(stats) {
+  const years = Object.keys(stats.byYear).sort().reverse();
+  
+  if (years.length === 0) {
+    const curYear = new Date().getFullYear();
+    years.push(String(curYear));
   }
 
-  html += `
-      </tbody>
-    </table>
-  `;
+  let html = `<div class="stats-cal-grid-years">`;
 
+  years.forEach(y => {
+    const pl = stats.byYear[y] || 0;
+    const count = stats.yearTradeCount[y] || 0;
+    const isSelected = statsSelectedDate === y && currentStatsPeriod === 'yearly' ? 'selected' : '';
+
+    let plHtml = `<span style="color:var(--text-muted); font-size:11px;">No trades</span>`;
+    if (count > 0) {
+      const formattedPL = pl >= 0 ? `+₹${Math.round(pl).toLocaleString()}` : `-₹${Math.round(Math.abs(pl)).toLocaleString()}`;
+      const plClass = pl >= 0 ? 'bull' : 'bear';
+      plHtml = `<span class="stats-cal-period-pl ${plClass}">${formattedPL}</span>`;
+    }
+
+    html += `
+      <div class="stats-cal-period-cell ${isSelected}" onclick="selectStatsCalendarPeriod('yearly', '${y}')">
+        <div class="stats-cal-period-title">${y}</div>
+        <div class="stats-cal-period-sub">${count} trades</div>
+        ${plHtml}
+      </div>
+    `;
+  });
+
+  html += `</div>`;
   return html;
 }
 
@@ -2487,7 +2650,7 @@ function renderJournalStatsTab(isMobile = false) {
   equityToggleHtml += `</div>`;
 
   const equityCurveCardHtml = `
-    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '16px' : '24px'};">
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '16px' : '20px'}; margin-bottom: ${isMobile ? '16px' : '24px'};">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
         <div>
           <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Equity Curve</div>
@@ -2509,223 +2672,95 @@ function renderJournalStatsTab(isMobile = false) {
   const failedPct = (stats.executedCount > 0 ? (stats.failedCount / stats.executedCount * 100) : 0);
   window.lastTotalSetups = stats.totalEntries;
 
-  const activityHtml = `
-    <div class="stats-section-title">Trade Activity</div>
-    <div style="margin-bottom: ${isMobile ? '16px' : '24px'}; display: flex; justify-content: flex-start;">
-      <div class="apple-fitness-card" style="max-width: 440px; width: 100%; box-sizing: border-box; padding: 16px 20px;">
-        <div class="ring-svg-container" id="activity-rings-svg-container">
-          <svg width="130" height="130" viewBox="0 0 140 140">
-            <!-- Total Logged (Outer) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="54" stroke="#ffcc00" stroke-width="10" />
-            <circle class="fitness-ring-fg ring-active ring-total" cx="70" cy="70" r="54" stroke="#ffcc00" stroke-width="10" 
-              stroke-dasharray="339.29" stroke-dashoffset="0" />
-            
-            <!-- Executed (Middle) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="40" stroke="#007aff" stroke-width="10" />
-            <circle class="fitness-ring-fg ring-active ring-executed" cx="70" cy="70" r="40" stroke="#007aff" stroke-width="10" 
-              stroke-dasharray="251.32" stroke-dashoffset="${251.32 - (execPct / 100) * 251.32}" />
-            
-            <!-- Passed (Inner) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="26" stroke="#34c759" stroke-width="10" />
-            <circle class="fitness-ring-fg ring-active ring-passed" cx="70" cy="70" r="26" stroke="#34c759" stroke-width="10" 
-              stroke-dasharray="163.36" stroke-dashoffset="${163.36 - (passedPct / 100) * 163.36}" />
-          </svg>
-          <div class="ring-center-readout">
-            <span class="ring-center-value" id="activity-center-value" style="font-size:18px;">${stats.totalEntries}</span>
-            <span class="ring-center-label" id="activity-center-label" style="font-size:8px;">Total Setups</span>
-          </div>
-        </div>
-        
-        <div class="ring-legend" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;">
-          <!-- Total Logged spans both columns -->
-          <div class="ring-legend-item activity-legend-item" data-ring="total" style="grid-column: span 2; padding: 6px 10px;" onmouseover="focusActivityRing('total', '${stats.totalEntries}', 'Total Logged')" onmouseout="resetActivityRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#ffcc00;"></span>
-              <span class="ring-legend-name" style="font-size:10px;">Total Logged</span>
-            </div>
-            <span class="ring-legend-val" style="font-size:11px;">${stats.totalEntries}</span>
-          </div>
-          
-          <!-- Executed -->
-          <div class="ring-legend-item activity-legend-item" data-ring="executed" style="padding: 6px 10px;" onmouseover="focusActivityRing('executed', '${stats.executedCount} (${execPct.toFixed(0)}%)', 'Executed')" onmouseout="resetActivityRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#007aff;"></span>
-              <span class="ring-legend-name" style="font-size:10px;">Executed</span>
-            </div>
-            <span class="ring-legend-val" style="font-size:11px;">${stats.executedCount}</span>
-          </div>
-          
-          <!-- Missed -->
-          <div class="ring-legend-item activity-legend-item" data-ring="total" style="padding: 6px 10px;" onmouseover="focusActivityRing('total', '${stats.missedCount} (${missedPct.toFixed(0)}%)', 'Missed')" onmouseout="resetActivityRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#ff9500;"></span>
-              <span class="ring-legend-name" style="font-size:10px;">Missed</span>
-            </div>
-            <span class="ring-legend-val" style="font-size:11px;">${stats.missedCount}</span>
-          </div>
-          
-          <!-- Passed -->
-          <div class="ring-legend-item activity-legend-item" data-ring="passed" style="padding: 6px 10px;" onmouseover="focusActivityRing('passed', '${stats.passedCount} (${passedPct.toFixed(0)}%)', 'Passed Wins')" onmouseout="resetActivityRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#34c759;"></span>
-              <span class="ring-legend-name" style="font-size:10px;">Passed</span>
-            </div>
-            <span class="ring-legend-val" style="font-size:11px;">${stats.passedCount}</span>
-          </div>
-          
-          <!-- Failed -->
-          <div class="ring-legend-item activity-legend-item" data-ring="executed" style="padding: 6px 10px;" onmouseover="focusActivityRing('executed', '${stats.failedCount} (${failedPct.toFixed(0)}%)', 'Failed')" onmouseout="resetActivityRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#ff2d55;"></span>
-              <span class="ring-legend-name" style="font-size:10px;">Failed</span>
-            </div>
-            <span class="ring-legend-val" style="font-size:11px;">${stats.failedCount}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
   const pnlClass = stats.netPL >= 0 ? 'bull' : 'bear';
   const winDaysPct = (stats.winDaysCount / (stats.winDaysCount + stats.lossDaysCount) * 100) || 0;
   const activeDaysPct = (stats.tradingDays / (stats.tradingDays + stats.noTradeDays) * 100) || 0;
   const consistencyScore = (stats.winRate + winDaysPct + activeDaysPct) / 3;
   window.lastConsistencyScore = consistencyScore;
 
-  const profitRatioPct = (stats.grossProfit + Math.abs(stats.grossLoss)) !== 0
-    ? (stats.grossProfit / (stats.grossProfit + Math.abs(stats.grossLoss)) * 100)
-    : 0;
   const ratioVal = stats.avgLossDay !== 0 ? (stats.avgWinDay / Math.abs(stats.avgLossDay)).toFixed(2) + 'x' : 'N/A';
+  const profitFactorVal = stats.profitFactor === Infinity ? 'Infinity' : (typeof stats.profitFactor === 'number' ? stats.profitFactor.toFixed(2) + 'x' : 'N/A');
 
-  const metricsHtml = `
-    <div class="stats-section-title">Performance Metrics</div>
-    <div class="apple-dashboard-grid" style="grid-template-columns: repeat(${isMobile ? 1 : 2}, 1fr); gap: ${isMobile ? '12px' : '20px'}; margin-bottom: ${isMobile ? '12px' : '20px'}; padding: 0;">
-      
-      <!-- Consistency Rings (Apple Fitness concentric rings) -->
-      <div class="apple-fitness-card">
-        <div class="ring-svg-container" id="concentric-rings-svg-container">
-          <svg width="140" height="140" viewBox="0 0 140 140">
-            <!-- Win Rate (Outer) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="54" stroke="#ff2d55" stroke-width="10" />
-            <circle class="fitness-ring-fg ring-active ring-win" cx="70" cy="70" r="54" stroke="#ff2d55" stroke-width="10" 
-              stroke-dasharray="339.29" stroke-dashoffset="${339.29 - (stats.winRate / 100) * 339.29}" />
-            
-            <!-- Green Days (Middle) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="40" stroke="#34c759" stroke-width="10" />
-            <circle class="fitness-ring-fg ring-active ring-green" cx="70" cy="70" r="40" stroke="#34c759" stroke-width="10" 
-              stroke-dasharray="251.32" stroke-dashoffset="${251.32 - (winDaysPct / 100) * 251.32}" />
-            
-            <!-- Active Days (Inner) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="26" stroke="#007aff" stroke-width="10" />
-            <circle class="fitness-ring-fg ring-active ring-active-days" cx="70" cy="70" r="26" stroke="#007aff" stroke-width="10" 
-              stroke-dasharray="163.36" stroke-dashoffset="${163.36 - (activeDaysPct / 100) * 163.36}" />
-          </svg>
-          <div class="ring-center-readout">
-            <span class="ring-center-value" id="consistency-center-value">${consistencyScore.toFixed(0)}%</span>
-            <span class="ring-center-label" id="consistency-center-label">Consistency</span>
-          </div>
+  // Helper to parse best/worst day string nicely into value and date parts
+  const parseBestWorst = (str) => {
+    if (!str || str === 'N/A') return { value: 'N/A', sub: '' };
+    const parts = str.split(' ');
+    if (parts.length >= 2) {
+      const datePart = parts[0];
+      const valPart = parts.slice(1).join(' ').replace('(', '').replace(')', '');
+      return { value: valPart, sub: datePart };
+    }
+    return { value: str, sub: '' };
+  };
+  const bestInfo = parseBestWorst(stats.bestDayStr);
+  const worstInfo = parseBestWorst(stats.worstDayStr);
+
+  const kpiHtml = `
+    <div class="kpi-col">
+      <!-- Chips row -->
+      <div class="kpi-activity-chips">
+        <div class="kpi-chip executed" title="Executed setups (Passed + Failed)"><i class="fa-solid fa-bolt"></i> ${stats.executedCount} Executed</div>
+        <div class="kpi-chip missed" title="Missed trading setups"><i class="fa-solid fa-circle-minus"></i> ${stats.missedCount} Missed</div>
+        <div class="kpi-chip passed" title="Passed (Win) setups"><i class="fa-solid fa-circle-check"></i> ${stats.passedCount} Passed</div>
+        <div class="kpi-chip failed" title="Failed (Loss) setups"><i class="fa-solid fa-circle-xmark"></i> ${stats.failedCount} Failed</div>
+      </div>
+
+      <!-- Hero Row: Net P&L & Win Rate -->
+      <div class="kpi-hero-row">
+        <div class="kpi-hero-card">
+          <div class="kpi-hero-label">Net P&L</div>
+          <div class="kpi-hero-value ${pnlClass}">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</div>
+          <div class="kpi-hero-sub">Gross Profit: <span class="bull">₹${stats.grossProfit.toLocaleString()}</span> | Loss: <span class="bear">₹${Math.abs(stats.grossLoss).toLocaleString()}</span></div>
         </div>
-        
-        <div class="ring-legend">
-          <div class="ring-legend-item" data-ring="win-rate" onmouseover="focusRing('win-rate', '${stats.winRate.toFixed(1)}%', 'Win Rate')" onmouseout="resetRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#ff2d55;"></span>
-              <span class="ring-legend-name">Win Rate</span>
-            </div>
-            <span class="ring-legend-val">${stats.winRate.toFixed(1)}%</span>
-          </div>
-          
-          <div class="ring-legend-item" data-ring="green-days" onmouseover="focusRing('green-days', '${stats.winDaysCount}W - ${stats.lossDaysCount}L', 'Green Days')" onmouseout="resetRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#34c759;"></span>
-              <span class="ring-legend-name">Green Days</span>
-            </div>
-            <span class="ring-legend-val">${winDaysPct.toFixed(0)}%</span>
-          </div>
-          
-          <div class="ring-legend-item" data-ring="active-days" onmouseover="focusRing('active-days', '${stats.tradingDays}/${stats.tradingDays + stats.noTradeDays}', 'Active Days')" onmouseout="resetRings()">
-            <div class="ring-legend-left">
-              <span class="ring-legend-dot" style="background:#007aff;"></span>
-              <span class="ring-legend-name">Active Days</span>
-            </div>
-            <span class="ring-legend-val">${activeDaysPct.toFixed(0)}%</span>
-          </div>
+        <div class="kpi-hero-card">
+          <div class="kpi-hero-label">Win Rate</div>
+          <div class="kpi-hero-value bull">${stats.winRate.toFixed(1)}%</div>
+          <div class="kpi-hero-sub">${stats.passedCount} Wins / ${stats.failedCount} Losses</div>
         </div>
       </div>
-      
-      <!-- Financial Efficiency & P&L Card -->
-      <div class="apple-fitness-card">
-        <div class="ring-svg-container">
-          <svg width="140" height="140" viewBox="0 0 140 140">
-            <!-- Profit share (Gold) -->
-            <circle class="fitness-ring-bg" cx="70" cy="70" r="48" stroke="#ffcc00" stroke-width="12" />
-            <circle class="fitness-ring-fg" cx="70" cy="70" r="48" stroke="#ffcc00" stroke-width="12" 
-              stroke-dasharray="301.59" stroke-dashoffset="${301.59 - (profitRatioPct / 100) * 301.59}" />
-          </svg>
-          <div class="ring-center-readout">
-            <span class="ring-center-value" style="color:var(--accent-gold);">${ratioVal}</span>
-            <span class="ring-center-label">W/L Ratio</span>
-          </div>
-        </div>
-        
-        <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom:6px;">
-            <span style="font-size:11px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">NET P&L</span>
-            <span class="ring-legend-val ${pnlClass}" style="font-size:16px; font-weight:800;">₹${stats.netPL >= 0 ? '+' : ''}${stats.netPL.toLocaleString()}</span>
-          </div>
-          
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-            <div>
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Avg Win Day</div>
-              <div class="bull" style="font-size:13px; font-weight:700; font-family:var(--font-display);">+₹${stats.avgWinDay.toFixed(0)}</div>
-            </div>
-            <div>
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Avg Loss Day</div>
-              <div class="bear" style="font-size:13px; font-weight:700; font-family:var(--font-display);">-₹${Math.abs(stats.avgLossDay).toFixed(0)}</div>
-            </div>
-          </div>
-          
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; border-top: 1px solid rgba(255,255,255,0.04); padding-top:6px;">
-            <div>
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Best Day</div>
-              <div class="bull" style="font-size:11px; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${stats.bestDayStr}">${stats.bestDayStr}</div>
-            </div>
-            <div>
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500;">Worst Day</div>
-              <div class="bear" style="font-size:11px; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${stats.worstDayStr}">${stats.worstDayStr}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-    </div>
-  `;
 
-  const timelineHtml = `
-    <div class="stats-section-title">P&L Timeline</div>
-    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
-      ${generateStatsPeriodSelectorHTML ? generateStatsPeriodSelectorHTML() : ''}
-      <div id="${isMobile ? 'mobile' : 'desktop'}-pnl-timeline-table-wrapper" style="max-height: 250px; overflow-y: auto;">
-        ${generatePLTimelineTableHTML(stats, currentStatsPeriod)}
+      <!-- Grid of Compact KPIs -->
+      <div class="kpi-grid-compact">
+        <div class="kpi-mini-card" title="Average gain on green trading days">
+          <div class="kpi-mini-label">Avg Win Day</div>
+          <div class="kpi-mini-value bull">+₹${stats.avgWinDay.toFixed(0)}</div>
+          <div class="kpi-mini-sub">${stats.winDaysCount} green days</div>
+        </div>
+        <div class="kpi-mini-card" title="Average loss on red trading days">
+          <div class="kpi-mini-label">Avg Loss Day</div>
+          <div class="kpi-mini-value bear">-₹${Math.abs(stats.avgLossDay).toFixed(0)}</div>
+          <div class="kpi-mini-sub">${stats.lossDaysCount} red days</div>
+        </div>
+        <div class="kpi-mini-card" title="Win Days / Total Trading Days">
+          <div class="kpi-mini-label">Green Days %</div>
+          <div class="kpi-mini-value">${winDaysPct.toFixed(1)}%</div>
+          <div class="kpi-mini-sub">${stats.winDaysCount}W - ${stats.lossDaysCount}L</div>
+        </div>
+        <div class="kpi-mini-card" title="Active Trading Days / Total Weekdays">
+          <div class="kpi-mini-label">Active Days %</div>
+          <div class="kpi-mini-value">${activeDaysPct.toFixed(1)}%</div>
+          <div class="kpi-mini-sub">${stats.tradingDays} active / ${stats.noTradeDays} idle</div>
+        </div>
+        <div class="kpi-mini-card" title="${stats.bestDayStr}">
+          <div class="kpi-mini-label">Best Day</div>
+          <div class="kpi-mini-value bull">${bestInfo.value}</div>
+          <div class="kpi-mini-sub">${bestInfo.sub}</div>
+        </div>
+        <div class="kpi-mini-card" title="${stats.worstDayStr}">
+          <div class="kpi-mini-label">Worst Day</div>
+          <div class="kpi-mini-value bear">${worstInfo.value}</div>
+          <div class="kpi-mini-sub">${worstInfo.sub}</div>
+        </div>
       </div>
     </div>
   `;
 
-  function generateStatsPeriodSelectorHTML() {
-    const periods = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
-    let periodSelectorHtml = `<div class="period-selector timeline-period-selector">`;
-    periods.forEach(p => {
-      const activeClass = currentStatsPeriod === p ? 'active' : '';
-      periodSelectorHtml += `<button class="period-btn ${activeClass}" data-period="${p}" onclick="switchStatsPeriod('${p}')">${p.toUpperCase()}</button>`;
-    });
-    periodSelectorHtml += `</div>`;
-    return periodSelectorHtml;
-  }
+
 
   const calendarHtml = `
     <div class="stats-section-title">Performance Calendar</div>
     <div class="apple-dashboard-grid" style="grid-template-columns: ${isMobile ? '1fr' : '1.2fr 0.8fr'}; gap: ${isMobile ? '12px' : '20px'};">
-      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};" id="${isMobile ? 'mobile' : 'desktop'}-stats-calendar-wrapper">
+      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '16px' : '20px'};" id="${isMobile ? 'mobile' : 'desktop'}-stats-calendar-wrapper">
         ${generateStatsCalendarHTML(statsCalendarYear, statsCalendarMonth)}
       </div>
       <div id="${isMobile ? 'mobile' : 'desktop'}-stats-day-detail-wrapper" style="min-height: 100px;">
@@ -2761,7 +2796,7 @@ function renderJournalStatsTab(isMobile = false) {
 
   const leaderboardHtml = `
     <div class="stats-section-title">Setup Performance Leaderboard</div>
-    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'}; overflow-x:auto;">
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '16px' : '20px'}; overflow-x:auto;">
       <table class="stats-leaderboard-table">
         <thead>
           <tr>
@@ -2895,13 +2930,13 @@ function renderJournalStatsTab(isMobile = false) {
   const timeAnalyticsHtml = `
     <div class="stats-section-title">Time-Based Analytics</div>
     <div class="apple-dashboard-grid" style="grid-template-columns: ${isMobile ? '1fr' : '1fr 1fr'}; gap: ${isMobile ? '12px' : '20px'};">
-      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '16px' : '20px'};">
         <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">Day of Week Performance</div>
         <div>
           ${dowRows}
         </div>
       </div>
-      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+      <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '16px' : '20px'};">
         <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">Monthly Performance Trend</div>
         <div style="max-height: 250px; overflow-y: auto;">
           ${monthlyTrendRows}
@@ -2912,7 +2947,7 @@ function renderJournalStatsTab(isMobile = false) {
 
   const exportHtml = `
     <div class="stats-section-title">Export Options</div>
-    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:14px; padding:${isMobile ? '12px' : '20px'};">
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '16px' : '20px'};">
       <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Download journal entries and metrics for offline analysis or physical backup.</div>
       <div class="export-buttons-row">
         <button class="btn-primary" onclick="exportJournalCSV()" style="font-size:12px; padding:6px 14px; border-radius:100px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
@@ -2925,9 +2960,7 @@ function renderJournalStatsTab(isMobile = false) {
   return `
     <div style="display:flex; flex-direction:column; gap:${isMobile ? '20px' : '32px'}; padding: ${isMobile ? '0 10px 24px' : '0 24px 40px'}; max-width:1200px; margin:0 auto;">
       ${equityCurveCardHtml}
-      ${activityHtml}
-      ${metricsHtml}
-      ${timelineHtml}
+      ${kpiHtml}
       ${calendarHtml}
       ${leaderboardHtml}
       ${missedHtml}
@@ -3903,6 +3936,60 @@ function resetActivityRings() {
   }
 }
 
+// Touch & Click Interactions for SVGs/Rings
+let isTouchDevice = false;
+window.addEventListener('touchstart', () => {
+  isTouchDevice = true;
+}, { passive: true });
+
+let clickedRingState = null; // { type, val, label, isActivity }
+
+function focusRingHover(type, val, label) {
+  if (isTouchDevice) return;
+  focusRing(type, val, label);
+}
+
+function resetRingsHover() {
+  if (isTouchDevice) return;
+  if (clickedRingState && !clickedRingState.isActivity) {
+    focusRing(clickedRingState.type, clickedRingState.val, clickedRingState.label);
+  } else {
+    resetRings();
+  }
+}
+
+function focusActivityRingHover(type, val, label) {
+  if (isTouchDevice) return;
+  focusActivityRing(type, val, label);
+}
+
+function resetActivityRingsHover() {
+  if (isTouchDevice) return;
+  if (clickedRingState && clickedRingState.isActivity) {
+    focusActivityRing(clickedRingState.type, clickedRingState.val, clickedRingState.label);
+  } else {
+    resetActivityRings();
+  }
+}
+
+function handleLegendItemClick(type, val, label, isActivity = false) {
+  if (clickedRingState && clickedRingState.type === type) {
+    clickedRingState = null;
+    if (isActivity) {
+      resetActivityRings();
+    } else {
+      resetRings();
+    }
+  } else {
+    clickedRingState = { type, val, label, isActivity };
+    if (isActivity) {
+      focusActivityRing(type, val, label);
+    } else {
+      focusRing(type, val, label);
+    }
+  }
+}
+
 // Save Custom Attributes
 function saveCustomAttribute(attrName, val) {
   const entry = entries.find(e => e.id === activeEntryId);
@@ -4734,8 +4821,7 @@ function switchMobileView(view) {
   });
 
   const headerTitle = document.getElementById('mobile-view-title');
-  const filterBar = document.getElementById('mobile-filter-bar');
-  const searchIcon = document.querySelector('.phone-header .fa-magnifying-glass');
+  const sortDropdown = document.getElementById('mobile-sort-dropdown-container');
   
   const gallery = document.getElementById('mobile-gallery-view');
   const calendar = document.getElementById('mobile-calendar-view');
@@ -4746,9 +4832,8 @@ function switchMobileView(view) {
 
   // Hide mobile header options for non-patterns views
   const isPatternsView = (view === 'patterns');
-  if (filterBar) filterBar.style.display = isPatternsView ? 'flex' : 'none';
+  if (sortDropdown) sortDropdown.style.display = isPatternsView ? 'block' : 'none';
   if (fab) fab.style.display = isPatternsView ? 'flex' : 'none';
-  if (searchIcon) searchIcon.style.display = isPatternsView ? 'block' : 'none';
 
   // Hide all screens
   gallery.style.display = 'none';
@@ -4768,8 +4853,6 @@ function switchMobileView(view) {
   headerTitle.textContent = view.charAt(0).toUpperCase() + view.slice(1);
 
   if (view === 'patterns') {
-    populatePatternFilterDropdowns();
-    syncFilterSelectors();
     gallery.style.display = 'grid'; // Force mobile Grid layout
     renderMobileContent();
   } else if (view === 'calendar') {
@@ -4786,29 +4869,8 @@ function switchMobileView(view) {
   }
 }
 
-function setMobileFilter(filter) {
-  mobileFilter = filter;
-  activeCalendarDate = null;
-  renderMobileContent();
-}
-
-function toggleMobileSearch() {
-  const wrapper = document.getElementById('mobile-search-wrapper');
-  if (wrapper) wrapper.style.display = wrapper.style.display === 'none' ? 'block' : 'none';
-}
-
-function toggleMobileSort() {
-  mobileSortAsc = !mobileSortAsc;
-  renderMobileContent();
-}
-
-function handleMobileSearch() {
-  mobileSearchText = document.getElementById('mobile-search').value.toLowerCase();
-  renderMobileContent();
-}
-
 function renderMobileContent() {
-  const processedList = getProcessedEntries(mobileSearchText, activeCalendarDate);
+  const processedList = getProcessedEntries(null, activeCalendarDate);
   renderMobileGallery(processedList);
 }
 
@@ -5154,7 +5216,7 @@ function renderMobileStats() {
   }
 
   container.innerHTML = `
-    <div class="stats-segmented-control" style="margin: 10px 10px 0;">
+    <div class="stats-segmented-control" style="margin: 10px auto 0;">
       <button class="stats-tab-btn ${activeSetup}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('setup')">Setup Stats</button>
       <button class="stats-tab-btn ${activeJournal}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('journal')">Journal Stats</button>
     </div>

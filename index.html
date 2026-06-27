@@ -86,30 +86,15 @@
                 <button class="tab-btn" id="tab-d-table" onclick="setDesktopLayout('table')">Table</button>
               </div>
 
-              <!-- Simplified Dropdown Filters (Bias & Patterns) -->
-              <div style="display: flex; gap: 8px; align-items: center;" id="desktop-filters-group">
-                <select class="input-select" id="desktop-filter-bias" onchange="handleFilterChange()" style="width: auto;">
-                  <option value="all">All Biases</option>
-                  <option value="Bullish">Bullish</option>
-                  <option value="Bearish">Bearish</option>
-                  <option value="Both">Both</option>
-                </select>
-
-                <select class="input-select" id="desktop-filter-pattern" onchange="handleFilterChange()" style="width: auto;">
-                  <option value="all">All Patterns</option>
-                  <!-- Dynamically populated -->
-                </select>
-
-                <select class="input-select" id="desktop-sort-gallery" onchange="handleSortChange(this.value)" style="width: auto;">
-                  <option value="newest">Newest First</option>
-                  <option value="oldest">Oldest First</option>
-                </select>
-              </div>
-
-              <!-- Search Bar -->
-              <div class="search-wrapper" id="desktop-search-wrapper">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" class="search-input" id="desktop-search" placeholder="Search patterns..." oninput="handleDesktopSearch()">
+              <!-- Compact Sort Icon Dropdown Container -->
+              <div class="custom-sort-dropdown" id="desktop-sort-dropdown-container" style="position: relative; display: inline-block;">
+                <button class="btn-icon" id="desktop-sort-trigger" onclick="toggleSortMenu('desktop', event)" title="Sort Setups" style="height: 34px; width: 34px; display: flex; align-items: center; justify-content: center;">
+                  <i class="fa-solid fa-arrow-down-wide-short"></i>
+                </button>
+                <div class="custom-sort-menu" id="desktop-sort-menu">
+                  <div class="custom-sort-item active" data-value="newest" onclick="selectSortOption('newest', 'desktop')">Newest First</div>
+                  <div class="custom-sort-item" data-value="oldest" onclick="selectSortOption('oldest', 'desktop')">Oldest First</div>
+                </div>
               </div>
 
               <!-- New Button -->
@@ -268,7 +253,16 @@
             <div style="width:16px;"></div>
             <div class="phone-header-title" id="mobile-view-title">Patterns</div>
             <div class="phone-header-icons">
-              <i class="fa-solid fa-magnifying-glass" onclick="toggleMobileSearch()"></i>
+              <!-- Custom Sort Icon Dropdown Container -->
+              <div class="custom-sort-dropdown" id="mobile-sort-dropdown-container" style="display: none; position: relative;">
+                <button id="mobile-sort-trigger" onclick="toggleSortMenu('mobile', event)" style="background: none; border: none; color: var(--text-main); font-size: 16px; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;">
+                  <i class="fa-solid fa-arrow-down-wide-short"></i>
+                </button>
+                <div class="custom-sort-menu" id="mobile-sort-menu">
+                  <div class="custom-sort-item active" data-value="newest" onclick="selectSortOption('newest', 'mobile')">Newest</div>
+                  <div class="custom-sort-item" data-value="oldest" onclick="selectSortOption('oldest', 'mobile')">Oldest</div>
+                </div>
+              </div>
             </div>
           </header>
 
@@ -277,34 +271,6 @@
             <div class="pull-refresh-pill">
               <i class="fa-solid fa-arrows-rotate spinner-ref" style="font-size: 11px;"></i>
               <span id="pull-to-refresh-text">Pull to refresh...</span>
-            </div>
-          </div>
-
-          <!-- Mobile Filters Panel (Dropdowns) -->
-          <div class="phone-tabs-bar" id="mobile-filter-bar">
-            <!-- Mobile Search Bar overlay -->
-            <div class="search-wrapper" id="mobile-search-wrapper" style="display: none; margin-bottom: 4px;">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" class="search-input" id="mobile-search" placeholder="Search patterns..." oninput="handleMobileSearch()" style="width: 100%;">
-            </div>
-            
-            <div style="display: flex; gap: 8px; width: 100%;" id="mobile-dropdown-filters">
-              <select class="input-select mobile-filter-select" id="mobile-filter-bias" onchange="handleFilterChange()">
-                <option value="all">All Biases</option>
-                <option value="Bullish">Bullish</option>
-                <option value="Bearish">Bearish</option>
-                <option value="Both">Both</option>
-              </select>
-
-              <select class="input-select mobile-filter-select" id="mobile-filter-pattern" onchange="handleFilterChange()">
-                <option value="all">All Patterns</option>
-                <!-- populated dynamically -->
-              </select>
-
-              <select class="input-select mobile-filter-select" id="mobile-sort" onchange="handleSortChange(this.value)">
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-              </select>
             </div>
           </div>
 
