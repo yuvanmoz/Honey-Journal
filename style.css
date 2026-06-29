@@ -10,7 +10,7 @@
   --font-display: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  /* macOS Dark Mode Aesthetic - Deeper Indigo Charcoal */
+  /* macOS Dark Mode Aesthetic */
   --bg-app: #161622;
   --bg-primary: #1c1c26;
   --bg-secondary: #16161e;
@@ -24,56 +24,85 @@
   --text-secondary: #A5A5A5;
   --text-muted: #7A7A7A;
 
-  /* Accent — Vibrant Olive Green & Gold for Translucent Surfaces */
   --accent-olive: #A2E048;
   --accent-olive-hover: #B5F15B;
   --accent-olive-light: rgba(162, 224, 72, 0.15);
-
   --accent-gold: #FFB703;
   --accent-gold-hover: #FFC83B;
 
-  /* Semantics */
   --color-bull: #A2E048;
   --color-bear: #FF5E5E;
   --color-both: #4A90E2;
   --color-neutral: #A5A5A5;
 
-  /* Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
 
-  /* Radii - HIG specifications */
   --radius-sm: 6px;
   --radius-md: 12px;
-  --radius-lg: 24px; /* Card border radius 24px */
+  --radius-lg: 24px;
   --radius-full: 9999px;
 
-  /* Transitions - Remapped to Spring Easing System */
-  --transition-fast: var(--ease-snappy);
-  --transition-normal: var(--ease-smooth);
-  --transition-slow: var(--ease-gentle);
-
-  /* iOS 26 Liquid Glass Material Tokens */
   --glass-bg: rgba(28, 28, 36, 0.55);
   --glass-border: rgba(255, 255, 255, 0.10);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.09);
   --glass-blur: blur(28px) saturate(190%);
 
-  /* Spring Easing Curves (Apple system springs) */
-  --spring-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --spring-smooth: cubic-bezier(0.16, 1, 0.3, 1);
-  --spring-gentle: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-snappy: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-smooth: 0.55s cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-gentle: 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-
-  /* Legacy Apple Glass definitions for compatibility */
   --apple-glass-bg: var(--glass-bg);
   --apple-glass-border: var(--glass-border);
   --apple-blur: var(--glass-blur);
   --apple-accent-blue: #007aff;
   --apple-accent-green: #34c759;
+
+  /* ===== Elastic Snap Motion System - Single Unified Layer ===== */
+  --es-pop:    cubic-bezier(0.34, 1.72, 0.64, 1);
+  --es-snap:   cubic-bezier(0.34, 1.40, 0.64, 1);
+  --es-smooth: cubic-bezier(0.16, 1.00, 0.30, 1);
+  --es-gentle: cubic-bezier(0.22, 1.00, 0.36, 1);
+  --es-exit:   cubic-bezier(0.36, 0.00, 0.66, 0.00);
+
+  --dur-instant:  100ms;
+  --dur-fast:     160ms;
+  --dur-medium:   260ms;
+  --dur-nav:      380ms;
+
+  --t-interactive:
+    color            var(--dur-fast)    ease,
+    opacity          var(--dur-fast)    ease,
+    background-color var(--dur-fast)    ease,
+    border-color     var(--dur-fast)    ease,
+    box-shadow       var(--dur-medium)  var(--es-smooth),
+    transform        var(--dur-instant) var(--es-snap);
+
+  --t-layout:
+    transform var(--dur-nav)    var(--es-gentle),
+    opacity   var(--dur-medium) var(--es-smooth),
+    width     var(--dur-nav)    var(--es-gentle);
+
+  --t-theme:
+    background-color var(--dur-medium) var(--es-smooth),
+    color            var(--dur-medium) var(--es-smooth),
+    border-color     var(--dur-medium) var(--es-smooth);
+
+  /* Legacy Aliases - nothing breaks */
+  --duration-instant:    var(--dur-instant);
+  --duration-fast:       var(--dur-fast);
+  --duration-medium:     var(--dur-medium);
+  --duration-navigation: var(--dur-nav);
+  --curve-snappy:        var(--es-snap);
+  --curve-smooth:        var(--es-smooth);
+  --curve-gentle:        var(--es-gentle);
+  --spring-snappy:       var(--es-pop);
+  --spring-smooth:       var(--es-smooth);
+  --spring-gentle:       var(--es-gentle);
+  --ease-snappy:         var(--dur-instant) var(--es-snap);
+  --ease-smooth:         var(--dur-medium)  var(--es-smooth);
+  --ease-gentle:         var(--dur-nav)     var(--es-gentle);
+  --transition-fast:        var(--t-interactive);
+  --transition-normal:      var(--t-interactive);
+  --transition-slow:        var(--t-layout);
+  --transition-interactive: var(--t-interactive);
 }
 
 /* ── macOS Light Theme HIG ─────────────────────────────────────────────── */
@@ -134,7 +163,7 @@ body {
   font-family: var(--font-body);
   display: flex;
   flex-direction: column;
-  transition: background-color var(--transition-normal), color var(--transition-normal);
+  transition: var(--t-theme);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -198,7 +227,7 @@ button, input, select, textarea {
   font-weight: 500;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .layout-btn:hover {
@@ -347,7 +376,7 @@ button, input, select, textarea {
   justify-content: space-between;
   padding: 24px 0;
   flex-shrink: 0;
-  transition: width var(--ease-smooth);
+  transition: width var(--dur-nav) var(--es-gentle);
   position: relative;
   z-index: 2;
 }
@@ -408,7 +437,7 @@ button, input, select, textarea {
   text-align: left;
   display: flex;
   align-items: center;
-  transition: color var(--transition-fast);
+  transition: color var(--dur-fast) ease;
   outline: none;
   margin-top: -4px;
 }
@@ -445,7 +474,7 @@ button, input, select, textarea {
   font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
   position: relative;
 }
 
@@ -525,12 +554,12 @@ button, input, select, textarea {
   background-color: var(--color-bull);
   border-radius: var(--radius-full);
   box-shadow: 0 0 8px var(--color-bull), 0 0 16px hsla(72, 34%, 54%, 0.2);
-  animation: syncPulse 2.5s ease-in-out infinite;
+  animation: syncPulse 2s var(--es-smooth) infinite;
 }
 
 @keyframes syncPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.72); }
 }
 
 /* ── Desktop Main Area ─────────────────────────────────────────────────── */
@@ -596,7 +625,7 @@ button, input, select, textarea {
   font-weight: 600;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
   white-space: nowrap;
 }
 
@@ -608,7 +637,7 @@ button, input, select, textarea {
   background-color: rgba(255, 255, 255, 0.14);
   color: var(--text-main);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 4px rgba(0, 0, 0, 0.25);
-  transition: var(--ease-snappy);
+  transition: var(--t-interactive);
 }
 
 [data-theme="light"] .tab-btn.active {
@@ -665,7 +694,7 @@ button, input, select, textarea {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
   color: var(--text-secondary);
 }
 
@@ -678,8 +707,8 @@ button, input, select, textarea {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
   color: var(--text-main);
-  transform: scale(1.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  transform: scale(1.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 [data-theme="light"] .btn-icon:hover {
@@ -702,7 +731,7 @@ button, input, select, textarea {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: var(--text-secondary);
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 [data-theme="light"] .btn-icon-sm {
@@ -714,8 +743,8 @@ button, input, select, textarea {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
   color: var(--text-main);
-  transform: scale(1.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  transform: scale(1.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 [data-theme="light"] .btn-icon-sm:hover {
@@ -736,7 +765,7 @@ button, input, select, textarea {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
   color: #fff;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -750,7 +779,7 @@ button, input, select, textarea {
 
 .btn-primary:hover {
   background-color: var(--accent-olive-hover);
-  transform: translateY(-1px) scale(1.02);
+  transform: translateY(-2px) scale(1.04);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 20px rgba(162, 224, 72, 0.45);
 }
 
@@ -759,8 +788,8 @@ button, input, select, textarea {
 }
 
 .btn-primary:active {
-  transform: translateY(0) scale(0.96);
-  transition: var(--ease-snappy);
+  transform: translateY(0) scale(0.92);
+  transition: transform var(--dur-instant) var(--es-snap);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -774,8 +803,9 @@ button, input, select, textarea {
 }
 
 @keyframes cardEnter {
-  from { opacity: 0; transform: translateY(18px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  0%   { opacity: 0; transform: translateY(24px) scale(0.93); }
+  60%  { opacity: 1; transform: translateY(-3px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .journal-card {
@@ -786,13 +816,13 @@ button, input, select, textarea {
   border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
-  transition: all var(--ease-smooth);
+  transition: var(--t-interactive);
   position: relative;
   display: flex;
   flex-direction: column;
   height: 330px; /* Fixed card height */
   box-shadow: var(--glass-shadow);
-  animation: cardEnter var(--ease-smooth) both;
+  animation: none;
 }
 
 .journal-card::before {
@@ -811,7 +841,7 @@ button, input, select, textarea {
   mask-composite: exclude;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--transition-normal);
+  transition: opacity var(--dur-fast) ease;
 }
 
 .journal-card:hover {
@@ -849,7 +879,7 @@ button, input, select, textarea {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--ease-gentle);
+  transition: transform var(--dur-medium) var(--es-gentle);
 }
 
 .journal-card:hover .card-img {
@@ -965,7 +995,7 @@ button, input, select, textarea {
   overflow-y: auto;
   flex-shrink: 0;
   transform: translateX(100%);
-  transition: transform var(--ease-smooth);
+  transition: transform var(--dur-nav) var(--es-gentle);
   box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3), var(--glass-shadow);
 }
 
@@ -1067,7 +1097,7 @@ button, input, select, textarea {
   justify-content: center;
   gap: 8px;
   opacity: 0;
-  transition: opacity var(--ease-snappy);
+  transition: opacity var(--dur-fast) ease;
 }
 
 .detail-chart-wrapper:hover .chart-upload-overlay {
@@ -1162,7 +1192,7 @@ button, input, select, textarea {
   font-size: 13px;
   outline: none;
   cursor: pointer;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
   -webkit-appearance: none;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a5a5a5' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
@@ -1196,7 +1226,7 @@ button, input, select, textarea {
   width: 100%;
   font-size: 13px;
   outline: none;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 [data-theme="light"] .input-text {
@@ -1230,7 +1260,7 @@ button, input, select, textarea {
   min-height: 34px;
   cursor: pointer;
   align-items: center;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 [data-theme="light"] .tag-multiselect-trigger {
@@ -1267,18 +1297,13 @@ button, input, select, textarea {
 
 .tag-multiselect-dropdown.open {
   display: block;
-  animation: dropdownSlide 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: dropdownSlide var(--dur-medium) var(--es-snap);
 }
 
 @keyframes dropdownSlide {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  0%   { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  65%  { opacity: 1; transform: translateY(2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .tag-dropdown-item {
@@ -1333,7 +1358,7 @@ button, input, select, textarea {
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1375,7 +1400,7 @@ button, input, select, textarea {
   min-height: 100px;
   outline: none;
   resize: vertical;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 [data-theme="light"] .textarea-control {
@@ -1440,7 +1465,7 @@ button, input, select, textarea {
   flex-direction: column;
   gap: 22px;
   transform: scale(0.88);
-  transition: transform var(--ease-snappy);
+  transition: transform var(--dur-medium) var(--es-snap);
 }
 
 .dialog-overlay.open .dialog-box {
@@ -1471,7 +1496,7 @@ button, input, select, textarea {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 
@@ -1484,8 +1509,8 @@ button, input, select, textarea {
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.20);
-  transform: scale(1.02);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), var(--shadow-sm);
+  transform: scale(1.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), var(--shadow-sm);
 }
 
 [data-theme="light"] .btn-secondary:hover {
@@ -1599,8 +1624,9 @@ button, input, select, textarea {
 }
 
 @keyframes mobileCardEnter {
-  from { opacity: 0; transform: scale(0.94) translateY(12px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
+  0%   { opacity: 0; transform: scale(0.90) translateY(16px); }
+  65%  { opacity: 1; transform: scale(1.02) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .phone-card {
@@ -1614,14 +1640,24 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   cursor: pointer;
-  transition: all var(--ease-smooth);
+  transition: var(--t-interactive);
   height: 220px; /* Fixed height for mobile gallery cards */
   animation: mobileCardEnter var(--ease-smooth) both;
 }
 
+.journal-card.should-animate {
+  animation: cardEnter var(--dur-nav) var(--es-snap) both;
+  will-change: transform, opacity;
+}
+
+.phone-card.should-animate {
+  animation: mobileCardEnter var(--dur-medium) var(--es-snap) both;
+  will-change: transform, opacity;
+}
+
 .phone-card:hover {
   border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+  transform: translateY(-3px) scale(1.01);
   box-shadow: var(--glass-shadow);
 }
 
@@ -1631,8 +1667,8 @@ button, input, select, textarea {
 }
 
 .phone-card:active {
-  transform: scale(0.96);
-  transition: var(--ease-snappy);
+  transform: scale(0.94);
+  transition: transform var(--dur-instant) var(--es-snap);
 }
 
 .phone-card-header {
@@ -1696,7 +1732,7 @@ button, input, select, textarea {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 16px rgba(162, 224, 72, 0.35), var(--shadow-md);
   cursor: pointer;
   z-index: 95;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
   border: none;
   font-size: 16px;
 }
@@ -1707,8 +1743,8 @@ button, input, select, textarea {
 
 .phone-fab:hover {
   background-color: var(--accent-olive-hover);
-  transform: scale(1.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 24px rgba(162, 224, 72, 0.45), var(--shadow-md);
+  transform: scale(1.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 28px rgba(162, 224, 72, 0.55), var(--shadow-md);
 }
 
 [data-theme="light"] .phone-fab:hover {
@@ -1716,8 +1752,8 @@ button, input, select, textarea {
 }
 
 .phone-fab:active {
-  transform: scale(0.92);
-  transition: var(--ease-snappy);
+  transform: scale(0.88);
+  transition: transform var(--dur-instant) var(--es-pop);
 }
 
 /* ── Floating Navigation Dock (Apple Inspired) ──────────────────────────── */
@@ -1738,7 +1774,7 @@ button, input, select, textarea {
   z-index: 100;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
   padding: 0 12px;
-  transition: all var(--ease-smooth);
+  transition: var(--t-interactive);
 }
 
 [data-theme="dark"] .phone-bottom-nav {
@@ -1759,14 +1795,14 @@ button, input, select, textarea {
   cursor: pointer;
   flex: 1;
   height: 100%;
-  transition: color var(--transition-fast);
+  transition: color var(--dur-fast) ease;
   position: relative;
 }
 
 .phone-nav-item i {
   font-size: 20px;
   color: #8e8e93;
-  transition: color var(--transition-fast), transform var(--transition-fast);
+  transition: color var(--dur-fast) ease, transform var(--dur-instant) var(--es-snap);
   position: relative;
   z-index: 2;
 }
@@ -1889,7 +1925,7 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: all var(--ease-smooth);
+  transition: var(--t-interactive);
   box-shadow: var(--glass-shadow);
 }
 
@@ -1944,7 +1980,7 @@ button, input, select, textarea {
   padding: 12px 16px;
   border-radius: var(--radius-md);
   font-size: 13px;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .stat-list-item:hover {
@@ -1977,7 +2013,7 @@ button, input, select, textarea {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   font-size: 13px;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .stats-rank-item:hover {
@@ -2060,7 +2096,7 @@ button, input, select, textarea {
   font-size: 11px;
   position: relative;
   cursor: pointer;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 .calendar-day-cell:hover {
@@ -2129,7 +2165,7 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  transition: border-color var(--ease-smooth);
+  transition: var(--t-interactive);
   box-shadow: var(--glass-shadow);
 }
 
@@ -2214,18 +2250,13 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  animation: setupFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: setupFadeIn var(--dur-nav) var(--es-snap);
 }
 
 @keyframes setupFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  0%   { opacity: 0; transform: translateY(28px) scale(0.94); }
+  65%  { opacity: 1; transform: translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .setup-icon {
@@ -2287,7 +2318,7 @@ button, input, select, textarea {
   cursor: pointer;
   z-index: 10;
   opacity: 0;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .detail-chart-wrapper:hover .delete-current-image-btn {
@@ -2322,7 +2353,7 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .thumbnail-item:hover {
@@ -2347,7 +2378,7 @@ button, input, select, textarea {
   outline: none;
   color: var(--text-secondary);
   font-size: 12px;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .thumbnail-item.add-btn:hover {
@@ -2427,8 +2458,9 @@ button, input, select, textarea {
 .thumbnail-item .thumb-primary:hover {
   transform: scale(1.15);
   border-color: var(--accent-gold);
-  color: var(--accent-gold);
 }
+
+
 
 .thumbnail-item.is-primary .thumb-primary {
   background: var(--accent-gold);
@@ -2471,7 +2503,7 @@ button, input, select, textarea {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 [data-theme="light"] .bias-chip {
@@ -2531,7 +2563,7 @@ button, input, select, textarea {
   border-left: 1px solid var(--glass-border);
   z-index: 50;
   transform: translateX(100%);
-  transition: transform var(--ease-smooth);
+  transition: transform var(--dur-nav) var(--es-gentle);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -2680,6 +2712,14 @@ button, input, select, textarea {
   cursor: zoom-out;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity var(--dur-medium) var(--es-smooth);
+}
+.lightbox-overlay.open {
+  opacity: 1;
+}
+.lightbox-overlay.closing {
+  opacity: 0;
 }
 .lightbox-content {
   max-width: 90%;
@@ -2687,7 +2727,10 @@ button, input, select, textarea {
   object-fit: contain;
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
-  animation: lightboxZoomIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: lightboxZoomIn var(--dur-medium) var(--es-snap);
+}
+.lightbox-content.closing {
+  animation: lightboxZoomOut var(--dur-medium) var(--es-exit) forwards;
 }
 .lightbox-close {
   position: absolute;
@@ -2712,8 +2755,14 @@ button, input, select, textarea {
   color: var(--accent-gold);
 }
 @keyframes lightboxZoomIn {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+  0%   { opacity: 0; transform: scale(0.88); }
+  65%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes lightboxZoomOut {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.88); }
 }
 
 /* ── Main Detail Image Overlays & Navigation ──────────────────────────────── */
@@ -2773,8 +2822,9 @@ button, input, select, textarea {
   animation: bounceHV 1.8s infinite ease-in-out;
 }
 @keyframes bounceHV {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(0, -4px); }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25%       { transform: translate(3px, -5px) scale(1.1); }
+  75%       { transform: translate(-3px, 2px) scale(0.95); }
 }
 .repositioning-active {
   outline: 2px solid var(--accent-gold);
@@ -2812,13 +2862,13 @@ button, input, select, textarea {
   border-radius: 24px; /* macOS premium card radius */
   padding: 22px 24px;
   box-shadow: var(--glass-shadow);
-  transition: transform var(--ease-smooth), box-shadow var(--ease-smooth), border-color var(--transition-fast);
+  transition: var(--t-interactive);
 }
 [data-theme="light"] .apple-metric-card {
   background: radial-gradient(circle at top left, rgba(0, 0, 0, 0.02), transparent), var(--glass-bg);
 }
 .apple-metric-card:hover {
-  transform: translateY(-4px) scale(1.01);
+  transform: translateY(-5px) scale(1.015);
   box-shadow: var(--glass-shadow), 0 12px 28px rgba(0, 0, 0, 0.25);
   border-color: rgba(255, 255, 255, 0.2);
 }
@@ -2839,7 +2889,7 @@ button, input, select, textarea {
   border-radius: 24px;
   padding: 22px 24px;
   box-shadow: var(--glass-shadow);
-  transition: transform var(--ease-smooth), box-shadow var(--ease-smooth), border-color var(--transition-fast);
+  transition: var(--t-interactive);
   align-items: center;
   position: relative;
   overflow: visible;
@@ -2959,7 +3009,7 @@ button, input, select, textarea {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.03);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 [data-theme="light"] .ring-legend-item {
   background: rgba(0, 0, 0, 0.01);
@@ -3221,13 +3271,13 @@ button, input, select, textarea {
   flex-direction: column;
   justify-content: center;
   min-height: 96px;
-  transition: transform var(--ease-smooth), box-shadow var(--ease-smooth), border-color var(--transition-fast);
+  transition: var(--t-interactive);
 }
 [data-theme="light"] .apple-insight-card {
   background: radial-gradient(circle at top left, rgba(0, 0, 0, 0.02), transparent), var(--glass-bg);
 }
 .apple-insight-card:hover {
-  transform: translateY(-4px) scale(1.01);
+  transform: translateY(-5px) scale(1.015);
   box-shadow: var(--glass-shadow), 0 12px 28px rgba(0, 0, 0, 0.25);
   border-color: rgba(255, 255, 255, 0.2);
 }
@@ -3347,7 +3397,7 @@ button, input, select, textarea {
   height: 100%;
   z-index: 1000;
   transform: translateY(100%);
-  transition: transform var(--transition-slow);
+  transition: transform var(--dur-nav) var(--es-gentle);
 }
 .phone-container .phone-detail-view.open {
   transform: translateY(0);
@@ -3379,7 +3429,7 @@ button, input, select, textarea {
   cursor: pointer;
   min-height: 32px;
   flex-wrap: wrap;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
   width: 100%;
   box-sizing: border-box;
 }
@@ -3534,7 +3584,7 @@ button, input, select, textarea {
   border-radius: 4px;
   display: flex;
   align-items: center;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .tag-picker-action-btn:hover {
@@ -3612,7 +3662,7 @@ button, input, select, textarea {
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform var(--dur-instant) var(--es-snap), border-color var(--dur-fast) ease;
   padding: 0;
 }
 
@@ -3733,7 +3783,7 @@ button, input, select, textarea {
   z-index: 10001;
   display: flex;
   flex-direction: column;
-  transition: all var(--ease-smooth);
+  transition: var(--t-interactive);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   cursor: default;
@@ -3836,7 +3886,7 @@ button, input, select, textarea {
   flex-direction: column;
   gap: 8px;
   opacity: 1;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--dur-fast) ease;
 }
 
 .lightbox-notes-drawer.collapsed .drawer-scroll-content {
@@ -3957,7 +4007,7 @@ button, input, select, textarea {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s ease;
+  transition: transform var(--dur-medium) var(--es-gentle);
 }
 .subgallery-card:hover .subgallery-img {
   transform: scale(1.03);
@@ -4044,25 +4094,6 @@ button, input, select, textarea {
   gap: 10px;
   pointer-events: none;
 }
-.toast-message {
-  background-color: rgba(255, 255, 255, 0.72);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: 18px; /* Compact pill shape */
-  height: 36px;
-  padding: 0 16px;
-  color: #007aff; /* Match active blue of light dock */
-  font-size: 11.5px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  pointer-events: auto;
-  animation: toastFadeIn 0.35s var(--ease-snappy), toastFadeOut 0.35s var(--ease-snappy) 2.7s forwards;
-  transition: all var(--ease-snappy);
-}
 .toast-message i {
   font-size: 13px;
   color: inherit !important;
@@ -4087,13 +4118,15 @@ button, input, select, textarea {
 [data-theme="dark"] .toast-message.error {
   color: #ff453a;
 }
-@keyframes toastFadeIn {
-  from { transform: translateY(-20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes toastPop {
+  0%   { opacity: 0; transform: translateY(-28px) scale(0.88); }
+  65%  { opacity: 1; transform: translateY(4px) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-@keyframes toastFadeOut {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(-20px); opacity: 0; }
+
+@keyframes toastDismiss {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.88); }
 }
 
 /* ── Sub-Gallery Playbook Card ─────────────────────────────────────────── */
@@ -4147,7 +4180,7 @@ button, input, select, textarea {
   border-radius: var(--radius-md);
   resize: vertical;
   outline: none;
-  transition: all var(--transition-fast);
+  transition: var(--t-interactive);
 }
 
 .playbook-inline-textarea:focus {
@@ -4365,7 +4398,7 @@ button, input, select, textarea {
   background-color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   color: #007aff; /* Match active blue of light dock */
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
+  transition: var(--t-interactive);
   pointer-events: auto; /* Allow clicks/taps if needed */
 }
 
@@ -4396,8 +4429,8 @@ button, input, select, textarea {
 }
 
 @keyframes meshDrift {
-  from { transform: scale(1) rotate(0deg); }
-  to   { transform: scale(1.08) rotate(2deg); }
+  0%   { transform: scale(1)    rotate(0deg)   translate(0, 0); }
+  100% { transform: scale(1.06) rotate(1.5deg) translate(8px, -6px); }
 }
 
 /* ── iOS 26 Specular Shimmer Keyframes ────────────────────────────────── */
@@ -4502,7 +4535,7 @@ button, input, select, textarea {
   align-items: center;
   gap: 8px;
   user-select: none;
-  transition: all var(--ease-snappy);
+  transition: transform var(--dur-instant) var(--es-snap), opacity var(--dur-fast) ease;
 }
 
 [data-theme="light"] .apple-dropdown-trigger {
@@ -4535,7 +4568,7 @@ button, input, select, textarea {
   display: none;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  animation: dropdownSlide 0.2s var(--ease-snappy);
+  animation: dropdownSlide var(--dur-medium) var(--es-snap);
 }
 
 .apple-dropdown-menu.open {
@@ -4721,7 +4754,7 @@ button, input, select, textarea {
   display: none;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  animation: dropdownSlide 0.2s var(--ease-snappy);
+  animation: dropdownSlide var(--dur-medium) var(--es-snap);
 }
 
 .custom-sort-menu.open {
@@ -4784,7 +4817,7 @@ button, input, select, textarea {
   align-items: center;
   gap: 6px;
   border: 1px solid transparent;
-  transition: all var(--transition-fast) var(--ease-smooth);
+  transition: var(--t-interactive);
   cursor: default;
 }
 
@@ -5272,7 +5305,7 @@ button, input, select, textarea {
   justify-content: center;
   cursor: pointer;
   position: relative;
-  transition: all var(--transition-fast) var(--ease-smooth);
+  transition: var(--t-interactive);
 }
 
 [data-theme="light"] .stats-cal-cell {
@@ -5395,5 +5428,55 @@ button, input, select, textarea {
   .stats-cal-grid-4 {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+}
+
+/* ── Calendar Slide Animations ─────────────────────────────────────────── */
+.calendar-widget.calendar-enter-next {
+  animation: calendarEnterNext var(--dur-medium) var(--es-snap) both;
+}
+
+.calendar-widget.calendar-enter-previous {
+  animation: calendarEnterPrevious var(--dur-medium) var(--es-snap) both;
+}
+
+@keyframes calendarEnterNext {
+  0%   { opacity: 0; transform: translate3d(16px, 0, 0) scale(0.97); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes calendarEnterPrevious {
+  0%   { opacity: 0; transform: translate3d(-16px, 0, 0) scale(0.97); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .journal-card:hover,
+  .phone-card:hover,
+  .apple-metric-card:hover,
+  .apple-insight-card:hover,
+  .settings-card:hover,
+  .btn-primary:hover,
+  .btn-icon:hover,
+  .btn-icon-sm:hover,
+  .phone-fab:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journal-card.should-animate,
+  .phone-card.should-animate,
+  .calendar-widget.calendar-enter-next,
+  .calendar-widget.calendar-enter-previous,
+  .reposition-instructions-overlay i,
+  .glass-shimmer,
+  .toast-message,
+  .bg-mesh {
+    animation: none !important;
+  }
+
+  .desktop-section.detail-open .desktop-main {
+    transform: none;
   }
 }

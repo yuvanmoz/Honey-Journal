@@ -24,6 +24,8 @@ let activeImageIndex = 0;
 let activePatternSubGallery = null;
 let currentSubGalleryImages = [];
 let activeLightboxIndex = 0;
+const animatedDesktopEntryIds = new Set();
+const animatedMobileEntryIds = new Set();
 
 // Date Formatting Helper (local timezone safe)
 function formatDateWithDay(dateStr) {
@@ -1258,9 +1260,19 @@ function renderDesktopGallery(list) {
 
   list.forEach((entry, index) => {
     const card = document.createElement('div');
-    card.className = `journal-card ${activeEntryId === entry.id ? 'active-border' : ''}`;
+    const isNew = !animatedDesktopEntryIds.has(entry.id);
+    const animateClass = isNew ? 'should-animate' : '';
+    if (isNew) {
+      animatedDesktopEntryIds.add(entry.id);
+    }
+    card.className = `journal-card ${activeEntryId === entry.id ? 'active-border' : ''} ${animateClass}`.trim();
     card.onclick = () => openEntryDetail(entry.id);
-    card.style.animationDelay = `${index * 40}ms`;
+    card.style.animationDelay = `${Math.min(index, 10) * 40}ms`;
+    if (isNew) {
+      card.addEventListener('animationend', () => {
+        card.classList.remove('should-animate');
+      }, { once: true });
+    }
 
     let biasColor = 'var(--color-neutral)';
     if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
@@ -4887,9 +4899,19 @@ function renderMobileGallery(list) {
 
   list.forEach((entry, index) => {
     const card = document.createElement('div');
-    card.className = 'phone-card';
+    const isNew = !animatedMobileEntryIds.has(entry.id);
+    const animateClass = isNew ? 'should-animate' : '';
+    if (isNew) {
+      animatedMobileEntryIds.add(entry.id);
+    }
+    card.className = `phone-card ${animateClass}`.trim();
     card.onclick = () => openEntryDetail(entry.id);
-    card.style.animationDelay = `${index * 40}ms`;
+    card.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
+    if (isNew) {
+      card.addEventListener('animationend', () => {
+        card.classList.remove('should-animate');
+      }, { once: true });
+    }
 
     let biasColor = 'var(--color-neutral)';
     if (entry.bias === 'Bullish') biasColor = 'var(--color-bull)';
@@ -5581,7 +5603,17 @@ function triggerLightboxZoom(src) {
 function closeLightbox() {
   const lightbox = document.getElementById('image-lightbox');
   if (lightbox) {
-    lightbox.style.display = 'none';
+    lightbox.classList.add('closing');
+    lightbox.classList.remove('open');
+    const content = lightbox.querySelector('.lightbox-content');
+    if (content) {
+      content.classList.add('closing');
+    }
+    setTimeout(() => {
+      lightbox.style.display = 'none';
+      lightbox.classList.remove('closing');
+      if (content) content.classList.remove('closing');
+    }, 260); // Matches --dur-medium
   }
 }
 
@@ -5592,6 +5624,10 @@ function openLightboxSlider(imagesList, startIndex) {
   const lightbox = document.getElementById('image-lightbox');
   if (lightbox) {
     lightbox.style.display = 'flex';
+    // Force a reflow to make sure opacity transitions
+    lightbox.offsetHeight;
+    lightbox.classList.add('open');
+    lightbox.classList.remove('closing');
     renderActiveLightboxImage();
   }
 }
