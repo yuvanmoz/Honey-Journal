@@ -1759,15 +1759,41 @@ function renderDesktopStats() {
       statsContent = renderJournalStatsTab(false);
     }
 
-    container.innerHTML = `
-      <div class="stats-segmented-control">
-        <button class="stats-tab-btn ${activeSetup}" onclick="switchStatsTab('setup')">Setup Statistics</button>
-        <button class="stats-tab-btn ${activeJournal}" onclick="switchStatsTab('journal')">Journal Statistics</button>
-      </div>
-      <div id="stats-tab-content" style="margin-top: 16px;">
-        ${statsContent}
-      </div>
-    `;
+    let control = document.getElementById('desktop-stats-segmented-control');
+    if (!control) {
+      container.innerHTML = `
+        <div class="stats-segmented-control" id="desktop-stats-segmented-control">
+          <span class="stats-pill" aria-hidden="true"></span>
+          <button class="stats-tab-btn ${activeSetup}" onclick="switchStatsTab('setup')">Setup Statistics</button>
+          <button class="stats-tab-btn ${activeJournal}" onclick="switchStatsTab('journal')">Journal Statistics</button>
+        </div>
+        <div id="stats-tab-content" style="margin-top: 16px;">
+          ${statsContent}
+        </div>
+      `;
+      control = document.getElementById('desktop-stats-segmented-control');
+    } else {
+      const btns = control.querySelectorAll('.stats-tab-btn');
+      btns.forEach(btn => {
+        if (btn.textContent.includes('Setup')) {
+          btn.className = `stats-tab-btn ${activeSetup}`.trim();
+        } else {
+          btn.className = `stats-tab-btn ${activeJournal}`.trim();
+        }
+      });
+      const contentDiv = document.getElementById('stats-tab-content');
+      if (contentDiv) {
+        contentDiv.innerHTML = statsContent;
+      }
+    }
+
+    requestAnimationFrame(() => {
+      const isNew = container.getAttribute('data-loaded') !== 'true';
+      if (isNew) {
+        container.setAttribute('data-loaded', 'true');
+      }
+      updateStatsTabPill('desktop', isNew);
+    });
 }
 
 function calculateJournalStats() {
@@ -2508,15 +2534,60 @@ function getEquityCurveData(period) {
   filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
   
   const now = new Date();
+  
+  // Helper to parse YYYY-MM-DD as local date (00:00:00)
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return new Date(0);
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, 0, 0, 0, 0);
+      }
+    }
+    const parsed = new Date(dateStr);
+    return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+  };
+
   if (period === 'week') {
-    const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    filtered = filtered.filter(e => new Date(e.date) >= cutoff);
+    // Current week's Sunday to Saturday
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDate = now.getDate();
+    const currentDay = now.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+    
+    const sunday = new Date(currentYear, currentMonth, currentDate - currentDay, 0, 0, 0, 0);
+    const saturday = new Date(currentYear, currentMonth, currentDate - currentDay + 6, 23, 59, 59, 999);
+    
+    filtered = filtered.filter(e => {
+      const entryDate = parseLocalDate(e.date);
+      return entryDate >= sunday && entryDate <= saturday;
+    });
   } else if (period === 'month') {
-    const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    filtered = filtered.filter(e => new Date(e.date) >= cutoff);
+    // Current month's 1st to end
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    const firstOfMonth = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
+    const lastOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+    
+    filtered = filtered.filter(e => {
+      const entryDate = parseLocalDate(e.date);
+      return entryDate >= firstOfMonth && entryDate <= lastOfMonth;
+    });
   } else if (period === 'year') {
-    const cutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-    filtered = filtered.filter(e => new Date(e.date) >= cutoff);
+    // Current calendar year's first day to last day
+    const currentYear = now.getFullYear();
+    
+    const firstOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
+    const lastOfYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+    
+    filtered = filtered.filter(e => {
+      const entryDate = parseLocalDate(e.date);
+      return entryDate >= firstOfYear && entryDate <= lastOfYear;
+    });
   }
   
   let currentSum = 0;
@@ -4818,6 +4889,49 @@ function clearDatabase() {
 // MOBILE CONTROLS & RENDERING
 // ==========================================================================
 
+// Helper to update the mobile bottom nav pill
+function updateMobileNavPill(instantly = false) {
+  const activeItem = document.querySelector('.phone-bottom-nav .phone-nav-item.active');
+  const pill = document.querySelector('.phone-bottom-nav .phone-nav-pill');
+  if (activeItem && pill) {
+    if (instantly) {
+      pill.style.transition = 'none';
+    }
+    pill.style.transform = `translateX(${activeItem.offsetLeft}px)`;
+    pill.style.width = `${activeItem.offsetWidth}px`;
+    if (instantly) {
+      pill.offsetHeight; // Force reflow
+      pill.style.transition = '';
+    }
+  }
+}
+
+// Helper to update the statistics tab pill
+function updateStatsTabPill(platform, instantly = false) {
+  const control = document.getElementById(`${platform}-stats-segmented-control`);
+  if (!control) return;
+  const activeBtn = control.querySelector('.stats-tab-btn.active');
+  const pill = control.querySelector('.stats-pill');
+  if (activeBtn && pill) {
+    if (instantly) {
+      pill.style.transition = 'none';
+    }
+    pill.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+    pill.style.width = `${activeBtn.offsetWidth}px`;
+    if (instantly) {
+      pill.offsetHeight; // Force reflow
+      pill.style.transition = '';
+    }
+  }
+}
+
+// Listen for window resize to adjust all pills
+window.addEventListener('resize', () => {
+  updateMobileNavPill(true);
+  updateStatsTabPill('desktop', true);
+  updateStatsTabPill('mobile', true);
+});
+
 function switchMobileView(view) {
   if (currentMobileView !== 'more' && currentMobileView !== view) {
     lastMobileView = currentMobileView;
@@ -4829,6 +4943,18 @@ function switchMobileView(view) {
     item.classList.remove('active');
     if (item.id === `nav-m-${view}`) {
       item.classList.add('active');
+    }
+  });
+
+  // Slide navigation pill to the active item
+  requestAnimationFrame(() => {
+    const nav = document.querySelector('.phone-bottom-nav');
+    const isFirstRun = nav && !nav.getAttribute('data-pill-initialized');
+    if (isFirstRun) {
+      nav.setAttribute('data-pill-initialized', 'true');
+      updateMobileNavPill(true);
+    } else {
+      updateMobileNavPill();
     }
   });
 
@@ -5237,15 +5363,41 @@ function renderMobileStats() {
     statsContent = renderJournalStatsTab(true);
   }
 
-  container.innerHTML = `
-    <div class="stats-segmented-control" style="margin: 10px auto 0;">
-      <button class="stats-tab-btn ${activeSetup}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('setup')">Setup Stats</button>
-      <button class="stats-tab-btn ${activeJournal}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('journal')">Journal Stats</button>
-    </div>
-    <div id="stats-tab-content-mobile" style="margin-top: 10px;">
-      ${statsContent}
-    </div>
-  `;
+  let control = document.getElementById('mobile-stats-segmented-control');
+  if (!control) {
+    container.innerHTML = `
+      <div class="stats-segmented-control" id="mobile-stats-segmented-control" style="margin: 10px auto 0;">
+        <span class="stats-pill" aria-hidden="true"></span>
+        <button class="stats-tab-btn ${activeSetup}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('setup')">Setup Stats</button>
+        <button class="stats-tab-btn ${activeJournal}" style="font-size:11px; padding: 4px 12px;" onclick="switchStatsTab('journal')">Journal Stats</button>
+      </div>
+      <div id="stats-tab-content-mobile" style="margin-top: 10px;">
+        ${statsContent}
+      </div>
+    `;
+    control = document.getElementById('mobile-stats-segmented-control');
+  } else {
+    const btns = control.querySelectorAll('.stats-tab-btn');
+    btns.forEach(btn => {
+      if (btn.textContent.includes('Setup')) {
+        btn.className = `stats-tab-btn ${activeSetup}`.trim();
+      } else {
+        btn.className = `stats-tab-btn ${activeJournal}`.trim();
+      }
+    });
+    const contentDiv = document.getElementById('stats-tab-content-mobile');
+    if (contentDiv) {
+      contentDiv.innerHTML = statsContent;
+    }
+  }
+
+  requestAnimationFrame(() => {
+    const isNew = container.getAttribute('data-loaded') !== 'true';
+    if (isNew) {
+      container.setAttribute('data-loaded', 'true');
+    }
+    updateStatsTabPill('mobile', isNew);
+  });
 }
 
 // Mobile Dashboard Page
