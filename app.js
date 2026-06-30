@@ -906,6 +906,10 @@ function applyTheme(theme) {
   if (btn) {
     btn.innerHTML = theme === 'light' ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
   }
+  const mobileSwitch = document.getElementById('mobile-theme-switch');
+  if (mobileSwitch) {
+    mobileSwitch.checked = (theme === 'dark');
+  }
 }
 
 function toggleTheme() {
@@ -5456,7 +5460,10 @@ function renderMobileMore() {
           </div>
         </div>
         <div class="apple-settings-row-right">
-          <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="toggleTheme()">Swap Theme</button>
+          <label class="apple-switch">
+            <input type="checkbox" id="mobile-theme-switch" onchange="toggleTheme()" ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'checked' : ''}>
+            <span class="apple-switch-slider"></span>
+          </label>
         </div>
       </div>
 
