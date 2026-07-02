@@ -5111,6 +5111,17 @@ function renderMobileGallery(list) {
       ? `style="transform: scale(${entry.imageScale || 1}) translate(${entry.imageX || 0}px, ${entry.imageY || 0}px); transform-origin: center center;"`
       : '';
 
+    // Format P&L display
+    const plVal = entry.customAttributes ? entry.customAttributes['P&L'] : null;
+    let plDisplay = '';
+    if (plVal !== null && plVal !== undefined && plVal !== '' && plVal !== 0) {
+      const numPl = typeof plVal === 'number' ? plVal : parsePL(String(plVal));
+      if (numPl !== 0) {
+        const plColor = numPl > 0 ? 'var(--color-bull)' : 'var(--color-bear)';
+        plDisplay = `<span style="font-family: var(--font-display); font-weight: 700; font-size: 9px; color: ${plColor}; margin-left: 4px;">${numPl > 0 ? '+' : ''}₹${numPl}</span>`;
+      }
+    }
+
     card.innerHTML = `
       <div class="phone-card-img-wrapper">
         ${hasImage ? `<img src="${firstImage}" alt="${displayTitle}" class="phone-card-img" ${transformStyle}>` : `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary);"><i class="fa-solid fa-chart-line" style="color:var(--text-muted);"></i></div>`}
@@ -5120,7 +5131,10 @@ function renderMobileGallery(list) {
           ${tagsHtml || `<span style="color: var(--text-muted); font-size: 9px;">No patterns</span>`}
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-          <span class="phone-card-date" style="font-size: 8px;">${formatDateWithDay(entry.date)}</span>
+          <div style="display: flex; align-items: center;">
+            <span class="phone-card-date" style="font-size: 8px;">${formatDateWithDay(entry.date)}</span>
+            ${plDisplay}
+          </div>
           <span class="tag-badge" style="font-size:8px; padding: 1px 4px; color: ${biasColor}; background-color: ${biasColor}1A; border: 1px solid ${biasColor}33;">${entry.bias}</span>
         </div>
       </div>
