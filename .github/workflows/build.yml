@@ -102,6 +102,10 @@ jobs:
         run: |
           CI=true npx tauri android init
 
+      - name: Inject Setup Statistics Android Widget
+        run: |
+          node src-tauri/mobile/inject_android_widget.js
+
       - name: Copy Android Launcher Icons
         run: |
           cp -r src-tauri/icons/android/* src-tauri/gen/android/app/src/main/res/

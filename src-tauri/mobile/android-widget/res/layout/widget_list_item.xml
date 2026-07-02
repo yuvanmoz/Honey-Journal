@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="8dp"
+    android:background="@drawable/widget_item_bg">
+
+    <TextView
+        android:id="@+id/item_rank"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1."
+        android:textColor="#8E8E93"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginEnd="6dp"/>
+
+    <TextView
+        android:id="@+id/item_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Double Bottom"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <!-- Badges Row -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginStart="8dp">
+
+        <TextView
+            android:id="@+id/badge_passed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_badge_passed"
+            android:paddingHorizontal="5dp"
+            android:paddingVertical="1dp"
+            android:text="0P"
+            android:textColor="#A2E048"
+            android:textSize="9sp"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/badge_missed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_badge_missed"
+            android:paddingHorizontal="5dp"
+            android:paddingVertical="1dp"
+            android:text="0M"
+            android:textColor="#FFB703"
+            android:textSize="9sp"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/badge_failed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_badge_failed"
+            android:paddingHorizontal="5dp"
+            android:paddingVertical="1dp"
+            android:text="0F"
+            android:textColor="#FF5E5E"
+            android:textSize="9sp" />
+    </LinearLayout>
+</LinearLayout>
