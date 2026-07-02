@@ -5596,3 +5596,117 @@ button, input, select, textarea {
 .apple-switch input:checked + .apple-switch-slider:before {
   transform: translateX(20px);
 }
+
+/* ── Setup Statistics Visual Bar Charts ────────────────────────────────── */
+.setup-barchart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 4px;
+}
+
+.setup-barchart-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.setup-barchart-label {
+  width: 130px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-barchart-bar-wrapper {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+[data-theme="light"] .setup-barchart-bar-wrapper {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.setup-barchart-bar {
+  height: 100%;
+  border-radius: 5px;
+  width: 0;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.setup-barchart-value {
+  width: 45px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* ── Setup Statistics Dashboard Widget ─────────────────────────────────── */
+.widget-toggle-group {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: 12px;
+  width: fit-content;
+}
+
+[data-theme="light"] .widget-toggle-group {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.widget-toggle-btn {
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.widget-toggle-btn.active {
+  background: var(--apple-accent-blue);
+  color: #fff;
+}
+
+.widget-rank-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.widget-rank-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.widget-rank-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-rank-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+[data-theme="light"] .widget-rank-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.widget-rank-list .stats-rank-item {
+  padding: 8px 12px;
+  font-size: 12px;
+}

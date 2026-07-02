@@ -55,6 +55,7 @@ let statsCalendarMonth = new Date().getMonth();
 let currentStatsPeriod = 'daily';
 let statsSelectedDate = null;
 let editingTagName = null;
+let activeWidgetTab = 'bull'; // 'bull' or 'bear'
 
 let desktopLayout = 'gallery'; // gallery, table
 let mobileLayout = 'gallery';  // mobile only supports gallery
@@ -1102,6 +1103,7 @@ function switchDesktopView(view) {
   const calendarView = document.getElementById('desktop-calendar-view');
   const statsView = document.getElementById('desktop-stats-view');
   const settingsView = document.getElementById('desktop-settings-view');
+  const dashboardView = document.getElementById('desktop-dashboard-view');
 
   // Hide header actions on dashboard/calendar/statistics/settings views to prevent clutter
   const isPatternsView = (view === 'patterns');
@@ -1115,6 +1117,7 @@ function switchDesktopView(view) {
   calendarView.style.display = 'none';
   statsView.style.display = 'none';
   settingsView.style.display = 'none';
+  if (dashboardView) dashboardView.style.display = 'none';
   
   const subGalleryView = document.getElementById('desktop-pattern-subgallery-view');
   if (subGalleryView) subGalleryView.style.display = 'none';
@@ -1142,6 +1145,10 @@ function switchDesktopView(view) {
     renderDesktopSettings();
   } else if (view === 'dashboard') {
     titleEl.textContent = 'Dashboard';
+    if (dashboardView) dashboardView.style.display = 'block';
+    renderDesktopDashboard();
+  } else if (view === 'stats') {
+    titleEl.textContent = 'Statistics';
     statsView.style.display = 'block';
     renderDesktopStats();
   }
@@ -1742,6 +1749,12 @@ function renderDesktopStats() {
       });
       if (sortedBearish.length === 0) bearHtml = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">No bearish patterns logged.</div>';
 
+      const maxBullCount = sortedBullish.length > 0 ? Math.max(...sortedBullish.map(item => item[1].total)) : 0;
+      const maxBearCount = sortedBearish.length > 0 ? Math.max(...sortedBearish.map(item => item[1].total)) : 0;
+      
+      const bullChartHtml = generateSetupBarChartHTML(sortedBullish, maxBullCount, '--color-bull');
+      const bearChartHtml = generateSetupBarChartHTML(sortedBearish, maxBearCount, '--color-bear');
+
       statsContent = `
         <div style="padding: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
           <div>
@@ -1749,6 +1762,7 @@ function renderDesktopStats() {
             <div class="stats-rank-list">
               ${bullHtml}
             </div>
+            ${bullChartHtml}
           </div>
           
           <div>
@@ -1756,6 +1770,7 @@ function renderDesktopStats() {
             <div class="stats-rank-list">
               ${bearHtml}
             </div>
+            ${bearChartHtml}
           </div>
         </div>
       `;
@@ -1797,6 +1812,7 @@ function renderDesktopStats() {
         container.setAttribute('data-loaded', 'true');
       }
       updateStatsTabPill('desktop', isNew);
+      animateSetupBarCharts();
     });
 }
 
@@ -1987,6 +2003,43 @@ function calculateJournalStats() {
     weekTradeCount, monthTradeCount, quarterTradeCount, yearTradeCount, dayOfWeekTradeCount,
     patternLeaderboard
   };
+}
+
+// Generate visual horizontal bar chart HTML for setups
+function generateSetupBarChartHTML(sortedList, maxCount, colorVar) {
+  if (sortedList.length === 0) {
+    return `<div style="color:var(--text-muted); font-size:12px; padding:10px 0; text-align:center;">No setup data available</div>`;
+  }
+  
+  let html = `<div class="setup-barchart-container">`;
+  sortedList.forEach(([name, stats]) => {
+    const total = stats.total || 0;
+    const percentage = maxCount > 0 ? (total / maxCount) * 100 : 0;
+    html += `
+      <div class="setup-barchart-row" title="${name}: ${total} logs (${stats.passed} Passed, ${stats.missed} Missed, ${stats.failed} Failed)">
+        <div class="setup-barchart-label">${name}</div>
+        <div class="setup-barchart-bar-wrapper">
+          <div class="setup-barchart-bar" style="width: 0%; background-color: var(${colorVar});" data-width="${percentage.toFixed(1)}%"></div>
+        </div>
+        <div class="setup-barchart-value">${total}</div>
+      </div>
+    `;
+  });
+  html += `</div>`;
+  return html;
+}
+
+// Animate setup bar charts by translating width from 0 to target percentage
+function animateSetupBarCharts() {
+  requestAnimationFrame(() => {
+    const bars = document.querySelectorAll('.setup-barchart-bar');
+    bars.forEach(bar => {
+      const targetWidth = bar.getAttribute('data-width');
+      if (targetWidth) {
+        bar.style.width = targetWidth;
+      }
+    });
+  });
 }
 
 function switchStatsTab(tab) {
@@ -4945,7 +4998,8 @@ function switchMobileView(view) {
   const items = document.querySelectorAll('.phone-bottom-nav .phone-nav-item');
   items.forEach(item => {
     item.classList.remove('active');
-    if (item.id === `nav-m-${view}`) {
+    const highlightView = (view === 'stats') ? 'dashboard' : view;
+    if (item.id === `nav-m-${highlightView}`) {
       item.classList.add('active');
     }
   });
@@ -5002,6 +5056,10 @@ function switchMobileView(view) {
     renderMobileCalendar();
   } else if (view === 'dashboard') {
     headerTitle.textContent = 'Dashboard';
+    dashboard.style.display = 'block';
+    renderMobileDashboard();
+  } else if (view === 'stats') {
+    headerTitle.textContent = 'Statistics';
     stats.style.display = 'block';
     renderMobileStats();
   } else if (view === 'more') {
@@ -5346,6 +5404,12 @@ function renderMobileStats() {
     });
     if (sortedBearish.length === 0) bearHtml = '<div style="color:var(--text-muted); font-size:11px; padding:6px;">No bearish patterns.</div>';
 
+    const maxBullCount = sortedBullish.length > 0 ? Math.max(...sortedBullish.map(item => item[1].total)) : 0;
+    const maxBearCount = sortedBearish.length > 0 ? Math.max(...sortedBearish.map(item => item[1].total)) : 0;
+    
+    const bullChartHtml = generateSetupBarChartHTML(sortedBullish, maxBullCount, '--color-bull');
+    const bearChartHtml = generateSetupBarChartHTML(sortedBearish, maxBearCount, '--color-bear');
+
     statsContent = `
       <div style="padding: 10px;">
         <div style="margin-bottom: 16px;">
@@ -5353,6 +5417,7 @@ function renderMobileStats() {
           <div class="stats-rank-list" style="gap:4px; margin-bottom:10px;">
             ${bullHtml}
           </div>
+          ${bullChartHtml}
         </div>
         
         <div>
@@ -5360,6 +5425,7 @@ function renderMobileStats() {
           <div class="stats-rank-list" style="gap:4px; margin-bottom:10px;">
             ${bearHtml}
           </div>
+          ${bearChartHtml}
         </div>
       </div>
     `;
@@ -5401,7 +5467,168 @@ function renderMobileStats() {
       container.setAttribute('data-loaded', 'true');
     }
     updateStatsTabPill('mobile', isNew);
+    animateSetupBarCharts();
   });
+}
+
+// Mobile Dashboard Page
+// Render Setup Statistics Widget inside Dashboard
+function renderSetupStatsWidget(platform) {
+  const container = document.getElementById(`${platform}-setup-stats-widget`);
+  if (!container) return;
+
+  const bullishCounts = {};
+  const bearishCounts = {};
+
+  const incrementCount = (counts, pat, status) => {
+    if (!counts[pat]) {
+      counts[pat] = { passed: 0, missed: 0, failed: 0, total: 0 };
+    }
+    counts[pat].total += 1;
+    if (status === 'PASSED') counts[pat].passed += 1;
+    else if (status === 'FAILED') counts[pat].failed += 1;
+    else counts[pat].missed += 1;
+  };
+
+  entries.forEach(entry => {
+    const status = entry.status || 'MISSED';
+    const entryPatterns = entry.patterns || [];
+    entryPatterns.forEach(pat => {
+      const tagObj = tags.find(t => t.name === pat);
+      const tagType = tagObj ? tagObj.type : 'Both';
+      
+      if (tagType === 'Bullish') {
+        incrementCount(bullishCounts, pat, status);
+      } else if (tagType === 'Bearish') {
+        incrementCount(bearishCounts, pat, status);
+      } else {
+        if (entry.bias === 'Bullish') {
+          incrementCount(bullishCounts, pat, status);
+        } else if (entry.bias === 'Bearish') {
+          incrementCount(bearishCounts, pat, status);
+        } else {
+          incrementCount(bullishCounts, pat, status);
+          incrementCount(bearishCounts, pat, status);
+        }
+      }
+    });
+  });
+
+  const sortedBullish = Object.entries(bullishCounts).sort((a, b) => b[1].total - a[1].total);
+  const sortedBearish = Object.entries(bearishCounts).sort((a, b) => b[1].total - a[1].total);
+
+  const activeTab = activeWidgetTab;
+  const isBull = activeTab === 'bull';
+  const displayList = isBull ? sortedBullish : sortedBearish;
+  
+  let listHtml = '';
+  displayList.forEach(([name, stats], index) => {
+    const pLabel = stats.passed;
+    const mLabel = stats.missed;
+    const fLabel = stats.failed;
+    listHtml += `
+      <div class="stats-rank-item" style="padding: 8px 12px; font-size: 12px; cursor: pointer;" onclick="openPatternSubGallery('${name}')">
+        <div class="stats-rank-label">
+          <span class="stats-rank-number" style="font-weight:700; color:var(--text-muted);">${index + 1}.</span>
+          <span style="font-weight:600; color:var(--text-main);">${name}</span>
+        </div>
+        <div class="stats-rank-badge-group" style="display: flex; gap: 4px;">
+          <span class="stats-rank-badge" style="background-color: rgba(162, 224, 72, 0.12); color: var(--color-bull); border: 1px solid rgba(162, 224, 72, 0.2); font-size: 9px; padding: 1px 5px;">${pLabel}P</span>
+          <span class="stats-rank-badge" style="background-color: rgba(255, 183, 3, 0.12); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.2); font-size: 9px; padding: 1px 5px;">${mLabel}M</span>
+          <span class="stats-rank-badge" style="background-color: rgba(255, 94, 94, 0.12); color: var(--color-bear); border: 1px solid rgba(255, 94, 94, 0.2); font-size: 9px; padding: 1px 5px;">${fLabel}F</span>
+        </div>
+      </div>
+    `;
+  });
+
+  if (displayList.length === 0) {
+    listHtml = `<div style="color:var(--text-muted); font-size:12px; text-align:center; padding: 30px 10px;">No ${isBull ? 'bullish' : 'bearish'} setups logged</div>`;
+  }
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Setup Statistics</div>
+      <div class="widget-toggle-group">
+        <button class="widget-toggle-btn ${isBull ? 'active' : ''}" onclick="toggleWidgetTab('${platform}', 'bull')">Bull</button>
+        <button class="widget-toggle-btn ${!isBull ? 'active' : ''}" onclick="toggleWidgetTab('${platform}', 'bear')">Bear</button>
+      </div>
+    </div>
+    <div class="widget-rank-list">
+      ${listHtml}
+    </div>
+    <div style="margin-top: 14px; text-align: right;">
+      <a href="#" style="font-size:11px; font-weight:700; color:var(--apple-accent-blue); text-decoration:none; display:inline-flex; align-items:center; gap:4px;" onclick="navigateToDetailedStats(event)">
+        View Detailed Stats <i class="fa-solid fa-chevron-right" style="font-size:9px;"></i>
+      </a>
+    </div>
+  `;
+}
+
+function toggleWidgetTab(platform, tab) {
+  activeWidgetTab = tab;
+  renderSetupStatsWidget('desktop');
+  renderSetupStatsWidget('mobile');
+}
+
+function navigateToDetailedStats(e) {
+  if (e) e.preventDefault();
+  if (currentDesktopView === 'dashboard') {
+    switchDesktopView('stats');
+  }
+  if (currentMobileView === 'dashboard') {
+    switchMobileView('stats');
+  }
+}
+
+// Desktop Dashboard Page
+function renderDesktopDashboard() {
+  const container = document.getElementById('desktop-dashboard-view');
+  if (!container) return;
+
+  const totalTrades = entries.length;
+  const passedTrades = entries.filter(e => e.status === 'PASSED').length;
+  const winRate = totalTrades > 0 ? ((passedTrades / totalTrades) * 100).toFixed(0) : 0;
+  const statsObj = calculatePatternStats();
+
+  container.innerHTML = `
+    <div class="dashboard-header-section">
+      <div class="dashboard-large-title">Dashboard</div>
+    </div>
+    
+    <div class="apple-dashboard-grid">
+      <div class="apple-metric-card">
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Total Setups</div>
+        <div style="font-size: 36px; font-weight: 800; color: var(--text-main);">${totalTrades}</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Logged in database</div>
+      </div>
+      
+      <div class="apple-metric-card">
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Win Rate</div>
+        <div style="font-size: 36px; font-weight: 800; color: var(--color-bull);">${winRate}%</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Of executed setups</div>
+      </div>
+
+      <div class="apple-metric-card">
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Most Profitable Setup</div>
+        <div class="bull" style="font-size: 18px; font-weight: 700; margin-top: 10px; word-break: break-all;">${statsObj.bestPattern || 'None'}</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Highest net profit</div>
+      </div>
+
+      <div class="apple-metric-card">
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Worst Performing Setup</div>
+        <div class="bear" style="font-size: 18px; font-weight: 700; margin-top: 10px; word-break: break-all;">${statsObj.worstPattern || 'None'}</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Lowest net return</div>
+      </div>
+    </div>
+
+    <div style="padding: 0 28px 28px 28px;">
+      <div id="desktop-setup-stats-widget" class="apple-metric-card" style="padding: 20px 24px; border-radius: 24px;">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+  `;
+
+  renderSetupStatsWidget('desktop');
 }
 
 // Mobile Dashboard Page
@@ -5426,7 +5653,7 @@ function renderMobileDashboard() {
       </div>
     </div>
     <div class="apple-insights-section" style="padding: 12px 20px; margin-top: 6px;">
-      <h2 class="apple-section-title" style="font-size: 15px; margin-bottom: 12px;">Setup Insights</h2>
+      <h2 class="apple-section-title" style="font-size: 14px; margin-bottom: 10px;">Setup Insights</h2>
       <div class="apple-insights-grid" style="grid-template-columns: 1fr; gap: 10px;">
         <div class="apple-insight-card" style="padding: 14px 16px; border-radius: 18px; min-height: 70px;">
           <div class="apple-insight-title" style="font-size: 9px; margin-bottom: 4px;">Most Profitable</div>
@@ -5437,8 +5664,14 @@ function renderMobileDashboard() {
           <div class="apple-insight-value bear" style="font-size: 15px;">${statsObj.worstPattern || 'None'}</div>
         </div>
       </div>
+      
+      <div id="mobile-setup-stats-widget" class="apple-metric-card" style="padding: 14px 16px; border-radius: 18px; margin-top: 12px;">
+        <!-- Loaded dynamically -->
+      </div>
     </div>
   `;
+
+  renderSetupStatsWidget('mobile');
 }
 
 // Mobile Settings / More options
