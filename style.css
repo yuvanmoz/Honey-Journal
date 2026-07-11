@@ -5710,3 +5710,334 @@ button, input, select, textarea {
   padding: 8px 12px;
   font-size: 12px;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PREMIUM TRADING WORKSPACE PROFILE PORTAL & LOADER
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Fullscreen Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulseLogo {
+  0%, 100% { transform: scale(1); opacity: 0.95; filter: brightness(1); }
+  50% { transform: scale(1.08); opacity: 1; filter: brightness(1.15) drop-shadow(0 0 10px rgba(212, 175, 55, 0.4)); }
+}
+
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes shakeDelete {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-2deg); }
+  75% { transform: rotate(2deg); }
+}
+
+/* Portal Cards */
+.portal-card {
+  position: relative;
+  width: 140px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+}
+
+.portal-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(212, 175, 55, 0.4);
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 12px 30px rgba(212, 175, 55, 0.15);
+}
+
+.portal-card-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 2px 6px rgba(255, 255, 255, 0.1);
+}
+
+/* Neon Avatar Theme Accents */
+.avatar-nifty {
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  color: #fff;
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.portal-card:hover .avatar-nifty {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+}
+
+.avatar-nasdaq {
+  background: linear-gradient(135deg, #06b6d4 0%, #0369a1 100%);
+  color: #fff;
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+}
+
+.portal-card:hover .avatar-nasdaq {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+}
+
+.avatar-generic {
+  background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+  color: #fff;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+}
+
+.portal-card:hover .avatar-generic {
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+}
+
+.avatar-add {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+}
+
+.portal-card.add-card:hover .avatar-add {
+  background: rgba(212, 175, 55, 0.05);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+}
+
+.portal-card-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+}
+
+.portal-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Portal Delete Overlay button */
+.portal-card-delete-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--color-bear);
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.portal-card-delete-badge:hover {
+  background: #ef4444;
+  transform: scale(1.15) !important;
+}
+
+/* Manage Mode styling state */
+.portal-container.manage-mode .portal-card:not(.add-card) {
+  animation: shakeDelete 0.25s ease-in-out infinite alternate;
+}
+
+.portal-container.manage-mode .portal-card:not(.add-card) .portal-card-delete-badge {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Light Theme tweaks */
+[data-theme="light"] .portal-card {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .portal-card:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .avatar-add {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] #profile-loading-overlay {
+  background: rgba(245, 245, 247, 0.8) !important;
+}
+
+/* ── Unified Premium Header Controls (Harmonized Style) ─────────────────── */
+
+/* 1. Workspace Switcher Button */
+#desktop-workspace-btn {
+  height: 36px !important;
+  border-radius: 100px !important;
+  padding: 0 16px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  border: 1px solid var(--border-color) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  color: var(--text-main) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-sm) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#desktop-workspace-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  transform: scale(1.03) !important;
+}
+
+[data-theme="light"] #desktop-workspace-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--shadow-sm) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="light"] #desktop-workspace-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 2. Gallery/Table Segmented Control */
+.segmented-control {
+  height: 36px !important;
+  border-radius: 100px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+  padding: 3px !important;
+  box-sizing: border-box !important;
+  gap: 2px !important;
+}
+
+[data-theme="light"] .segmented-control {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.segmented-control .tab-btn {
+  height: 28px !important;
+  border-radius: 100px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding: 0 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  color: var(--text-secondary) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.segmented-control .tab-btn.active {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--text-main) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="light"] .segmented-control .tab-btn.active {
+  background: #ffffff !important;
+  color: var(--text-main) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-sizing: border-box !important;
+}
+
+/* 3. Sort Trigger Button */
+#desktop-sort-trigger {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-sm) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transform: none !important;
+}
+
+#desktop-sort-trigger:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: var(--text-main) !important;
+  transform: scale(1.03) !important;
+}
+
+[data-theme="light"] #desktop-sort-trigger {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="light"] #desktop-sort-trigger:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: var(--text-main) !important;
+}
+
+/* 4. New Button */
+#desktop-header-controls .btn-primary {
+  height: 36px !important;
+  border-radius: 100px !important;
+  padding: 0 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  background-color: var(--accent-olive) !important;
+  color: #fff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 12px rgba(162, 224, 72, 0.2) !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+#desktop-header-controls .btn-primary:hover {
+  background-color: var(--accent-olive-hover) !important;
+  transform: scale(1.03) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 6px 16px rgba(162, 224, 72, 0.3) !important;
+}
+
+[data-theme="light"] #desktop-header-controls .btn-primary {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 10px rgba(92, 148, 13, 0.15) !important;
+}

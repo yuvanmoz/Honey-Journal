@@ -20,6 +20,21 @@ let activeCalendarDate = null; // Filter setups by calendar date if set
 let storagePath = null;        // Sync/storage folder path on local disk
 let originalEntryState = null; // Revert checkpoint for unsaved edits in existing setups
 
+// Multi-profile state
+let currentProfile = localStorage.getItem('honey_journal_current_profile') || null;
+let profilesList = JSON.parse(localStorage.getItem('honey_journal_profiles_list') || '["NIFTY"]');
+let isPortalManageMode = false; // Tracks if we are in delete-profiles mode
+
+function getProfilePath(...parts) {
+  if (storagePath) {
+    if (currentProfile) {
+      return joinPath(storagePath, 'profiles', currentProfile, ...parts);
+    }
+    return joinPath(storagePath, ...parts);
+  }
+  return '';
+}
+
 let activeImageIndex = 0;
 let activePatternSubGallery = null;
 let currentSubGalleryImages = [];
@@ -486,9 +501,18 @@ async function checkStorageFolderSetup() {
   if (savedPath) {
     storagePath = savedPath;
     if (setupOverlay) setupOverlay.style.display = 'none';
-    await loadDatabase();
-    switchDesktopView(currentDesktopView);
-    switchMobileView(currentMobileView);
+
+    if (currentProfile) {
+      await loadDatabase();
+      const activeProfNameEl = document.getElementById('desktop-active-profile-name');
+      if (activeProfNameEl) activeProfNameEl.textContent = currentProfile;
+
+      switchDesktopView(currentDesktopView);
+      switchMobileView(currentMobileView);
+    } else {
+      // Force profile selection
+      showProfilePortal();
+    }
     return;
   }
 
@@ -587,9 +611,16 @@ async function setStoragePath(path) {
   const setupOverlay = document.getElementById('setup-screen');
   if (setupOverlay) setupOverlay.style.display = 'none';
 
-  await loadDatabase();
-  switchDesktopView(currentDesktopView);
-  switchMobileView(currentMobileView);
+  if (currentProfile) {
+    await loadDatabase();
+    const activeProfNameEl = document.getElementById('desktop-active-profile-name');
+    if (activeProfNameEl) activeProfNameEl.textContent = currentProfile;
+
+    switchDesktopView(currentDesktopView);
+    switchMobileView(currentMobileView);
+  } else {
+    showProfilePortal();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -602,39 +633,117 @@ async function loadDatabase() {
   if (window.__TAURI__ && storagePath) {
     const invoke = getTauriInvoke();
     try {
-      // Create entries sub-directory
-      await invoke('fs_create_dir', { path: joinPath(storagePath, 'entries') });
+      // 1. LEGACY MIGRATION CHECK:
+      // If legacy root attributes.json or tags.json exists, migrate it to NIFTY profile
+      let isLegacy = false;
+      try {
+        await invoke('fs_read_text_file', { path: joinPath(storagePath, 'attributes.json') });
+        isLegacy = true;
+      } catch {
+        try {
+          await invoke('fs_read_text_file', { path: joinPath(storagePath, 'tags.json') });
+          isLegacy = true;
+        } catch {}
+      }
+
+      if (isLegacy) {
+        console.log('Legacy root data detected! Migrating to NIFTY profile...');
+        
+        // Ensure NIFTY profile directory structure exists
+        const niftyEntriesPath = joinPath(storagePath, 'profiles', 'NIFTY', 'entries');
+        await invoke('fs_create_dir', { path: niftyEntriesPath });
+
+        // A. Migrate tags
+        let legacyTags = seeds.initialTags;
+        try {
+          const content = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'tags.json') });
+          legacyTags = JSON.parse(content);
+          await invoke('fs_write_text_file', {
+            path: joinPath(storagePath, 'profiles', 'NIFTY', 'tags.json'),
+            content: JSON.stringify(legacyTags, null, 2)
+          });
+          await invoke('fs_remove_file', { path: joinPath(storagePath, 'tags.json') }).catch(()=>{});
+        } catch {}
+
+        // B. Migrate custom attributes
+        let legacyAttrs = seeds.defaultCustomAttributes;
+        try {
+          const content = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'attributes.json') });
+          legacyAttrs = JSON.parse(content);
+          await invoke('fs_write_text_file', {
+            path: joinPath(storagePath, 'profiles', 'NIFTY', 'attributes.json'),
+            content: JSON.stringify(legacyAttrs, null, 2)
+          });
+          await invoke('fs_remove_file', { path: joinPath(storagePath, 'attributes.json') }).catch(()=>{});
+        } catch {}
+
+        // C. Migrate entries
+        try {
+          const filesContent = await invoke('fs_read_dir_json', { path: joinPath(storagePath, 'entries') });
+          for (const content of filesContent) {
+            try {
+              const entryObj = JSON.parse(content);
+              if (entryObj && entryObj.id) {
+                await invoke('fs_write_text_file', {
+                  path: joinPath(storagePath, 'profiles', 'NIFTY', 'entries', `entry-${entryObj.id}.json`),
+                  content: JSON.stringify(entryObj, null, 2)
+                });
+                await invoke('fs_remove_file', { path: joinPath(storagePath, 'entries', `entry-${entryObj.id}.json`) }).catch(()=>{});
+              }
+            } catch {}
+          }
+        } catch {}
+
+        // Set default profile parameters
+        currentProfile = 'NIFTY';
+        localStorage.setItem('honey_journal_current_profile', 'NIFTY');
+        if (!profilesList.includes('NIFTY')) {
+          profilesList.push('NIFTY');
+          localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+        }
+        console.log('Legacy migration to NIFTY completed successfully!');
+      }
+
+      // If we don't have currentProfile selected yet, do not load data yet!
+      if (!currentProfile) {
+        console.log('No active profile chosen. Halting database load until selected.');
+        return;
+      }
+
+      // Create entries sub-directory inside active profile path
+      await invoke('fs_create_dir', { path: getProfilePath('entries') });
 
       // Load tags.json
       try {
-        const tagsContent = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'tags.json') });
+        const tagsContent = await invoke('fs_read_text_file', { path: getProfilePath('tags.json') });
         tags = JSON.parse(tagsContent);
       } catch {
-        console.log('No tags.json found, seeding...');
+        console.log(`No tags.json found for profile ${currentProfile}, seeding...`);
         tags = seeds.initialTags;
         await saveTagsToDisk();
       }
 
       // Load attributes.json
       try {
-        const attrsContent = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'attributes.json') });
+        const attrsContent = await invoke('fs_read_text_file', { path: getProfilePath('attributes.json') });
         customAttributes = JSON.parse(attrsContent);
       } catch {
-        console.log('No attributes.json found, seeding...');
+        console.log(`No attributes.json found for profile ${currentProfile}, seeding...`);
         customAttributes = seeds.defaultCustomAttributes;
         await saveAttributesToDisk();
       }
 
       // Load all entry files
       try {
-        const filesContent = await invoke('fs_read_dir_json', { path: joinPath(storagePath, 'entries') });
+        const filesContent = await invoke('fs_read_dir_json', { path: getProfilePath('entries') });
         const diskEntries = [];
         for (const content of filesContent) {
           try { diskEntries.push(JSON.parse(content)); } catch { /* skip corrupt file */ }
         }
 
         // Recover unsaved changes from localStorage if any
-        const localEntriesStr = localStorage.getItem('honey_journal_entries');
+        const prefix = `honey_profile_${currentProfile}_`;
+        const localEntriesStr = localStorage.getItem(prefix + 'entries');
         if (localEntriesStr) {
           try {
             const localEntries = JSON.parse(localEntriesStr);
@@ -693,21 +802,18 @@ async function loadDatabase() {
       }
 
       // Mirror to localStorage as a fast-read cache.
-      // IMPORTANT: this must be in its own try/catch — if a QuotaExceededError is
-      // thrown here it must NOT escape to the outer catch block, because that block
-      // treats any exception as a Tauri filesystem failure and falls back to reading
-      // the image-stripped localStorage cache, which would wipe images from the UI.
+      const prefix = `honey_profile_${currentProfile}_`;
       try {
-        localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-        localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-        localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+        localStorage.setItem(prefix + 'entries', JSON.stringify(entries));
+        localStorage.setItem(prefix + 'tags', JSON.stringify(tags));
+        localStorage.setItem(prefix + 'custom_attrs', JSON.stringify(customAttributes));
       } catch (quotaErr) {
         // Quota exceeded — cache a slim version without images (disk is source of truth)
         try {
           const slim = entries.map(e => { const c = Object.assign({}, e); c.images = []; return c; });
-          localStorage.setItem('honey_journal_entries', JSON.stringify(slim));
-          localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-          localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+          localStorage.setItem(prefix + 'entries', JSON.stringify(slim));
+          localStorage.setItem(prefix + 'tags', JSON.stringify(tags));
+          localStorage.setItem(prefix + 'custom_attrs', JSON.stringify(customAttributes));
         } catch (e2) {
           console.warn('localStorage full even after image strip on load mirror:', e2);
         }
@@ -722,17 +828,22 @@ async function loadDatabase() {
   // ---------------------------------------------------------------------------
   // FALLBACK: browser localStorage (web preview / mockup mode only)
   // ---------------------------------------------------------------------------
-  const localEntries   = localStorage.getItem('honey_journal_entries');
-  const localTags      = localStorage.getItem('honey_journal_tags');
-  const localCustomAttrs = localStorage.getItem('honey_journal_custom_attrs');
+  if (!currentProfile) {
+    console.log('No active profile chosen in browser fallback. Halting database load.');
+    return;
+  }
+  const prefix = `honey_profile_${currentProfile}_`;
+  const localEntries   = localStorage.getItem(prefix + 'entries');
+  const localTags      = localStorage.getItem(prefix + 'tags');
+  const localCustomAttrs = localStorage.getItem(prefix + 'custom_attrs');
 
   entries         = localEntries      ? JSON.parse(localEntries)      : seeds.initialEntries;
   tags            = localTags         ? JSON.parse(localTags)         : seeds.initialTags;
   customAttributes = localCustomAttrs ? JSON.parse(localCustomAttrs)  : seeds.defaultCustomAttributes;
 
-  if (!localEntries)      localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-  if (!localTags)         localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-  if (!localCustomAttrs)  localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+  if (!localEntries)      localStorage.setItem(prefix + 'entries', JSON.stringify(entries));
+  if (!localTags)         localStorage.setItem(prefix + 'tags', JSON.stringify(tags));
+  if (!localCustomAttrs)  localStorage.setItem(prefix + 'custom_attrs', JSON.stringify(customAttributes));
 
   // Migrate entries: old single-image string → images array, and status based on P&L
   entries.forEach(e => {
@@ -795,20 +906,18 @@ const entriesToSave = new Set();
 
 async function saveDatabase(specificEntry = null, saveAll = false, immediate = false) {
   // Write to localStorage as a backup cache.
-  // Wrapped in try/catch because large base64 images can exceed the ~5MB
-  // WebView localStorage quota and throw QuotaExceededError — we must NOT
-  // let that crash the function before reaching the Tauri disk write below.
+  const prefix = currentProfile ? `honey_profile_${currentProfile}_` : 'honey_journal_';
   try {
-    localStorage.setItem('honey_journal_entries', JSON.stringify(entries));
-    localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-    localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+    localStorage.setItem(prefix + 'entries', JSON.stringify(entries));
+    localStorage.setItem(prefix + 'tags', JSON.stringify(tags));
+    localStorage.setItem(prefix + 'custom_attrs', JSON.stringify(customAttributes));
   } catch (e) {
     // Quota exceeded — strip images from cache copy only (disk copy keeps them)
     try {
       const slim = entries.map(e => { const c = Object.assign({}, e); c.images = []; return c; });
-      localStorage.setItem('honey_journal_entries', JSON.stringify(slim));
-      localStorage.setItem('honey_journal_tags', JSON.stringify(tags));
-      localStorage.setItem('honey_journal_custom_attrs', JSON.stringify(customAttributes));
+      localStorage.setItem(prefix + 'entries', JSON.stringify(slim));
+      localStorage.setItem(prefix + 'tags', JSON.stringify(tags));
+      localStorage.setItem(prefix + 'custom_attrs', JSON.stringify(customAttributes));
     } catch (e2) {
       console.warn('localStorage full even after image strip — skipping cache write:', e2);
     }
@@ -851,38 +960,277 @@ async function saveDatabase(specificEntry = null, saveAll = false, immediate = f
 }
 
 async function saveTagsToDisk() {
-  if (!window.__TAURI__ || !storagePath) return;
+  if (!window.__TAURI__ || !storagePath || !currentProfile) return;
   const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
-    path: joinPath(storagePath, 'tags.json'),
+    path: getProfilePath('tags.json'),
     content: JSON.stringify(tags, null, 2)
   }).catch(err => console.error('Failed to save tags.json:', err));
 }
 
 async function saveAttributesToDisk() {
-  if (!window.__TAURI__ || !storagePath) return;
+  if (!window.__TAURI__ || !storagePath || !currentProfile) return;
   const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
-    path: joinPath(storagePath, 'attributes.json'),
+    path: getProfilePath('attributes.json'),
     content: JSON.stringify(customAttributes, null, 2)
   }).catch(err => console.error('Failed to save attributes.json:', err));
 }
 
 async function saveEntryToDisk(entry) {
-  if (!window.__TAURI__ || !storagePath) return;
+  if (!window.__TAURI__ || !storagePath || !currentProfile) return;
   const invoke = getTauriInvoke();
   await invoke('fs_write_text_file', {
-    path: joinPath(storagePath, 'entries', `entry-${entry.id}.json`),
+    path: getProfilePath('entries', `entry-${entry.id}.json`),
     content: JSON.stringify(entry, null, 2)
   }).catch(err => console.error(`Failed to save entry ${entry.id}:`, err));
 }
 
 async function removeEntryFromDisk(entryId) {
-  if (!window.__TAURI__ || !storagePath) return;
+  if (!window.__TAURI__ || !storagePath || !currentProfile) return;
   const invoke = getTauriInvoke();
   await invoke('fs_remove_file', {
-    path: joinPath(storagePath, 'entries', `entry-${entryId}.json`)
+    path: getProfilePath('entries', `entry-${entryId}.json`)
   }).catch(err => console.error(`Failed to delete entry ${entryId}:`, err));
+}
+
+
+// ──────────────────────────────────────────────────────────────────────────
+// PREMIUM PROFILE WORKSPACE MANAGEMENT PORTAL
+// ──────────────────────────────────────────────────────────────────────────
+
+function getProfileEntriesCount(profileName) {
+  try {
+    const cached = localStorage.getItem(`honey_profile_${profileName}_entries`);
+    if (cached) {
+      const arr = JSON.parse(cached);
+      return Array.isArray(arr) ? arr.length : 0;
+    }
+  } catch {}
+  return 0;
+}
+
+function showProfilePortal() {
+  const portalScreen = document.getElementById('profile-portal-screen');
+  if (!portalScreen) return;
+
+  isPortalManageMode = false;
+  const portalContainer = portalScreen.querySelector('.portal-container');
+  if (portalContainer) portalContainer.classList.remove('manage-mode');
+  
+  const manageBtnText = document.getElementById('portal-manage-btn-text');
+  if (manageBtnText) manageBtnText.textContent = 'Manage Portfolios';
+
+  // Toggle close button visibility based on whether a profile is active
+  const closeBtn = document.getElementById('portal-close-btn');
+  if (closeBtn) {
+    closeBtn.style.display = currentProfile ? 'flex' : 'none';
+  }
+
+  const cardsContainer = document.getElementById('portal-cards-container');
+  if (!cardsContainer) return;
+
+  let html = '';
+  profilesList.forEach(prof => {
+    const count = getProfileEntriesCount(prof);
+    let avatarClass = 'avatar-generic';
+    let iconClass = 'fa-solid fa-chart-pie';
+    
+    if (prof.toUpperCase() === 'NIFTY') {
+      avatarClass = 'avatar-nifty';
+      iconClass = 'fa-solid fa-chart-line';
+    } else if (prof.toUpperCase() === 'NASDAQ') {
+      avatarClass = 'avatar-nasdaq';
+      iconClass = 'fa-solid fa-chart-area';
+    }
+
+    html += `
+      <div class="portal-card" onclick="handlePortalCardClick('${prof}')">
+        <div class="portal-card-delete-badge" onclick="event.stopPropagation(); deleteProfile('${prof}')" title="Delete Portfolio">
+          <i class="fa-solid fa-trash-can"></i>
+        </div>
+        <div class="portal-card-avatar ${avatarClass}">
+          <i class="${iconClass}"></i>
+        </div>
+        <div class="portal-card-name">${prof}</div>
+        <div class="portal-card-meta">${count} setup${count !== 1 ? 's' : ''}</div>
+      </div>
+    `;
+  });
+
+  // Add Portfolio Card
+  html += `
+    <div class="portal-card add-card" onclick="promptCreateProfile()">
+      <div class="portal-card-avatar avatar-add">
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <div class="portal-card-name">Add Portfolio</div>
+      <div class="portal-card-meta">Create new</div>
+    </div>
+  `;
+
+  cardsContainer.innerHTML = html;
+  portalScreen.style.display = 'flex';
+  
+  // Make sure loading overlay is hidden
+  const loader = document.getElementById('profile-loading-overlay');
+  if (loader) loader.style.display = 'none';
+}
+
+function closeProfilePortal() {
+  const portalScreen = document.getElementById('profile-portal-screen');
+  if (portalScreen) {
+    portalScreen.style.display = 'none';
+  }
+}
+
+function handlePortalCardClick(profileName) {
+  if (isPortalManageMode) {
+    deleteProfile(profileName);
+  } else {
+    selectProfile(profileName);
+  }
+}
+
+async function selectProfile(profileName) {
+  const loader = document.getElementById('profile-loading-overlay');
+  const statusText = document.getElementById('loader-status-text');
+  if (loader) {
+    statusText.textContent = `Loading ${profileName} Portfolio...`;
+    loader.style.opacity = '1';
+    loader.style.display = 'flex';
+  }
+
+  const portalScreen = document.getElementById('profile-portal-screen');
+  if (portalScreen) portalScreen.style.opacity = '0';
+
+  // Wait 850ms to play the premium load animation
+  setTimeout(async () => {
+    try {
+      currentProfile = profileName;
+      localStorage.setItem('honey_journal_current_profile', profileName);
+
+      await loadDatabase();
+
+      // Reset filters and states
+      activeEntryId = null;
+      activeCalendarDate = null;
+      activePatternSubGallery = null;
+      desktopSearchText = '';
+      mobileSearchText = '';
+
+      // Update Header active label
+      const activeProfNameEl = document.getElementById('desktop-active-profile-name');
+      if (activeProfNameEl) activeProfNameEl.textContent = currentProfile;
+
+      // Re-initialize views
+      switchDesktopView(currentDesktopView);
+      switchMobileView(currentMobileView);
+
+      if (currentDesktopView === 'settings') renderDesktopSettings();
+      if (currentMobileView === 'more') renderMobileMore();
+
+      showToast(`Loaded ${profileName} Workspace`, 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Error loading workspace', 'error');
+    } finally {
+      if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(() => {
+          loader.style.display = 'none';
+          if (portalScreen) {
+            portalScreen.style.display = 'none';
+            portalScreen.style.opacity = '1';
+          }
+        }, 300);
+      }
+    }
+  }, 850);
+}
+
+function promptCreateProfile() {
+  const name = prompt("Enter a name for the new Portfolio Workspace (e.g., Nasdaq, Crypto):");
+  if (!name) return;
+
+  const cleanName = name.trim().replace(/[^a-zA-Z0-9_\-\s]/g, '');
+  if (!cleanName) {
+    alert("Invalid name.");
+    return;
+  }
+
+  const existing = profilesList.find(p => p.toLowerCase() === cleanName.toLowerCase());
+  if (existing) {
+    alert("A portfolio with this name already exists.");
+    return;
+  }
+
+  profilesList.push(cleanName);
+  localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+  
+  selectProfile(cleanName);
+}
+
+async function deleteProfile(profileName) {
+  if (profilesList.length <= 1) {
+    alert("You must keep at least one portfolio workspace.");
+    return;
+  }
+
+  const confirmMsg = `Are you sure you want to permanently delete the portfolio "${profileName}"? This will delete all setups, attributes, and image references under this workspace.`;
+  if (!confirm(confirmMsg)) return;
+
+  // Clean up directory if Tauri
+  if (window.__TAURI__ && storagePath) {
+    const invoke = getTauriInvoke();
+    try {
+      await invoke('fs_remove_file', { path: joinPath(storagePath, 'profiles', profileName, 'attributes.json') }).catch(()=>{});
+      await invoke('fs_remove_file', { path: joinPath(storagePath, 'profiles', profileName, 'tags.json') }).catch(()=>{});
+      
+      const cached = localStorage.getItem(`honey_profile_${profileName}_entries`);
+      if (cached) {
+        const arr = JSON.parse(cached);
+        if (Array.isArray(arr)) {
+          for (const e of arr) {
+            await invoke('fs_remove_file', { path: joinPath(storagePath, 'profiles', profileName, 'entries', `entry-${e.id}.json`) }).catch(()=>{});
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Tauri folder cleanup failed:', err);
+    }
+  }
+
+  profilesList = profilesList.filter(p => p !== profileName);
+  localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+
+  localStorage.removeItem(`honey_profile_${profileName}_entries`);
+  localStorage.removeItem(`honey_profile_${profileName}_tags`);
+  localStorage.removeItem(`honey_profile_${profileName}_custom_attrs`);
+
+  if (currentProfile === profileName) {
+    currentProfile = profilesList[0];
+    localStorage.setItem('honey_journal_current_profile', currentProfile);
+  }
+
+  showToast(`Deleted ${profileName} Workspace`, 'info');
+  showProfilePortal();
+}
+
+function togglePortalManageMode() {
+  const portalScreen = document.getElementById('profile-portal-screen');
+  if (!portalScreen) return;
+  const portalContainer = portalScreen.querySelector('.portal-container');
+  if (!portalContainer) return;
+
+  isPortalManageMode = !isPortalManageMode;
+  if (isPortalManageMode) {
+    portalContainer.classList.add('manage-mode');
+    document.getElementById('portal-manage-btn-text').textContent = 'Exit Manage Mode';
+  } else {
+    portalContainer.classList.remove('manage-mode');
+    document.getElementById('portal-manage-btn-text').textContent = 'Manage Portfolios';
+  }
 }
 
 
@@ -3285,6 +3633,25 @@ function renderDesktopSettings() {
   const container = document.getElementById('desktop-settings-view');
   if (!container) return;
   container.innerHTML = `
+    <div class="apple-settings-group-title">Trading Portfolios</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #5856d6;">
+            <i class="fa-solid fa-folder-tree"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Active Portfolio Workspace</span>
+            <span class="apple-settings-desc">Currently managing: <strong style="color:var(--accent-gold);">${currentProfile || 'None'}</strong></span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-primary" style="font-size: 11px; padding: 4px 12px; border-radius: 100px;" onclick="showProfilePortal()">Switch Workspace</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 4px;"></i>
+        </div>
+      </div>
+    </div>
+
     <div class="apple-settings-group-title">Local Folder Connections</div>
     <div class="apple-settings-group">
       <div class="apple-settings-row">
@@ -5481,7 +5848,26 @@ function renderMobileMore() {
   if (!container) return;
 
   container.innerHTML = `
-    <div class="apple-settings-group-title" style="margin-top: 8px;">App Settings</div>
+    <div class="apple-settings-group-title" style="margin-top: 8px;">Trading Portfolios</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #5856d6;">
+            <i class="fa-solid fa-folder-tree"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Active Portfolio</span>
+            <span class="apple-settings-desc">Managing: <strong style="color:var(--accent-gold);">${currentProfile || 'None'}</strong></span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-primary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="showProfilePortal()">Switch</button>
+          <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 2px;"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="apple-settings-group-title">App Settings</div>
     <div class="apple-settings-group">
       <div class="apple-settings-row">
         <div class="apple-settings-row-left">
