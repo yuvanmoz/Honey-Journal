@@ -35,6 +35,34 @@ function getProfilePath(...parts) {
   return '';
 }
 
+async function saveProfilesListToDisk() {
+  localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+  if (window.__TAURI__ && storagePath) {
+    const invoke = getTauriInvoke();
+    await invoke('fs_write_text_file', {
+      path: joinPath(storagePath, 'profiles.json'),
+      content: JSON.stringify(profilesList, null, 2)
+    }).catch(err => console.error('Failed to save profiles.json to disk:', err));
+  }
+}
+
+async function loadProfilesListFromDisk() {
+  if (window.__TAURI__ && storagePath) {
+    const invoke = getTauriInvoke();
+    try {
+      const content = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'profiles.json') });
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        profilesList = parsed;
+        localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+      }
+    } catch (err) {
+      console.log('No profiles.json found on disk, fallback to localStorage/default.');
+      await saveProfilesListToDisk();
+    }
+  }
+}
+
 let activeImageIndex = 0;
 let activePatternSubGallery = null;
 let currentSubGalleryImages = [];
@@ -502,6 +530,8 @@ async function checkStorageFolderSetup() {
     storagePath = savedPath;
     if (setupOverlay) setupOverlay.style.display = 'none';
 
+    await loadProfilesListFromDisk();
+
     if (currentProfile) {
       await loadDatabase();
       const activeProfNameEl = document.getElementById('desktop-active-profile-name');
@@ -611,6 +641,8 @@ async function setStoragePath(path) {
   const setupOverlay = document.getElementById('setup-screen');
   if (setupOverlay) setupOverlay.style.display = 'none';
 
+  await loadProfilesListFromDisk();
+
   if (currentProfile) {
     await loadDatabase();
     const activeProfNameEl = document.getElementById('desktop-active-profile-name');
@@ -699,7 +731,7 @@ async function loadDatabase() {
         localStorage.setItem('honey_journal_current_profile', 'NIFTY');
         if (!profilesList.includes('NIFTY')) {
           profilesList.push('NIFTY');
-          localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+          await saveProfilesListToDisk();
         }
         console.log('Legacy migration to NIFTY completed successfully!');
       }
@@ -1149,7 +1181,7 @@ async function selectProfile(profileName) {
   }, 850);
 }
 
-function promptCreateProfile() {
+async function promptCreateProfile() {
   const name = prompt("Enter a name for the new Portfolio Workspace (e.g., Nasdaq, Crypto):");
   if (!name) return;
 
@@ -1166,7 +1198,7 @@ function promptCreateProfile() {
   }
 
   profilesList.push(cleanName);
-  localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+  await saveProfilesListToDisk();
   
   selectProfile(cleanName);
 }
@@ -1202,7 +1234,7 @@ async function deleteProfile(profileName) {
   }
 
   profilesList = profilesList.filter(p => p !== profileName);
-  localStorage.setItem('honey_journal_profiles_list', JSON.stringify(profilesList));
+  await saveProfilesListToDisk();
 
   localStorage.removeItem(`honey_profile_${profileName}_entries`);
   localStorage.removeItem(`honey_profile_${profileName}_tags`);
