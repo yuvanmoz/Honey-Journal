@@ -1269,15 +1269,63 @@ function togglePortalManageMode() {
 
 // Theme Controls
 
+function setAccentTheme(themeName) {
+  const validThemes = ['honey-gold', 'emerald-bull', 'cyber-neon', 'obsidian-minimal'];
+  if (!validThemes.includes(themeName)) themeName = 'honey-gold';
+  localStorage.setItem('honey_journal_accent_theme', themeName);
+  document.documentElement.setAttribute('data-accent-theme', themeName);
+
+  document.querySelectorAll('.compact-accent-pill').forEach(pill => {
+    if (pill.getAttribute('data-preset') === themeName) {
+      pill.classList.add('active');
+    } else {
+      pill.classList.remove('active');
+    }
+  });
+}
+
+function getCompactAccentPickerHTML() {
+  const activeAccent = localStorage.getItem('honey_journal_accent_theme') || 'honey-gold';
+  return `
+    <div class="compact-accent-picker">
+      <button class="compact-accent-pill ${activeAccent === 'honey-gold' ? 'active' : ''}" data-preset="honey-gold" onclick="setAccentTheme('honey-gold')">
+        <span class="compact-swatch-dots">
+          <span class="compact-swatch-dot" style="background:#FFB703;"></span>
+          <span class="compact-swatch-dot" style="background:#A2E048;"></span>
+        </span>
+        <span>Honey Gold</span>
+      </button>
+      <button class="compact-accent-pill ${activeAccent === 'emerald-bull' ? 'active' : ''}" data-preset="emerald-bull" onclick="setAccentTheme('emerald-bull')">
+        <span class="compact-swatch-dots">
+          <span class="compact-swatch-dot" style="background:#10B981;"></span>
+          <span class="compact-swatch-dot" style="background:#34D399;"></span>
+        </span>
+        <span>Emerald</span>
+      </button>
+      <button class="compact-accent-pill ${activeAccent === 'cyber-neon' ? 'active' : ''}" data-preset="cyber-neon" onclick="setAccentTheme('cyber-neon')">
+        <span class="compact-swatch-dots">
+          <span class="compact-swatch-dot" style="background:#06B6D4;"></span>
+          <span class="compact-swatch-dot" style="background:#F43F5E;"></span>
+        </span>
+        <span>Cyber</span>
+      </button>
+      <button class="compact-accent-pill ${activeAccent === 'obsidian-minimal' ? 'active' : ''}" data-preset="obsidian-minimal" onclick="setAccentTheme('obsidian-minimal')">
+        <span class="compact-swatch-dots">
+          <span class="compact-swatch-dot" style="background:#38BDF8;"></span>
+          <span class="compact-swatch-dot" style="background:#94A3B8;"></span>
+        </span>
+        <span>Minimal</span>
+      </button>
+    </div>
+  `;
+}
+
 function initTheme() {
-  const savedTheme = localStorage.getItem('honey_journal_theme');
-  let currentTheme = 'dark';
-  if (savedTheme) {
-    currentTheme = savedTheme;
-  } else {
-    localStorage.setItem('honey_journal_theme', 'dark');
-  }
-  applyTheme(currentTheme);
+  const savedTheme = localStorage.getItem('honey_journal_theme') || 'dark';
+  applyTheme(savedTheme);
+
+  const savedAccent = localStorage.getItem('honey_journal_accent_theme') || 'honey-gold';
+  setAccentTheme(savedAccent);
 }
 
 function applyTheme(theme) {
@@ -3664,7 +3712,13 @@ function exportJournalPDF() {
 function renderDesktopSettings() {
   const container = document.getElementById('desktop-settings-view');
   if (!container) return;
+
   container.innerHTML = `
+    <div class="apple-settings-group-title">Visual Appearance & Accent Theme</div>
+    <div class="apple-settings-group" style="padding: 6px;">
+      ${getCompactAccentPickerHTML()}
+    </div>
+
     <div class="apple-settings-group-title">Trading Portfolios</div>
     <div class="apple-settings-group">
       <div class="apple-settings-row">
@@ -5917,6 +5971,14 @@ function renderMobileMore() {
             <span class="apple-switch-slider"></span>
           </label>
         </div>
+      </div>
+
+      <div class="apple-settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+        <div class="apple-settings-info">
+          <span class="apple-settings-title">Accent Theme</span>
+          <span class="apple-settings-desc">Select accent color preset</span>
+        </div>
+        ${getCompactAccentPickerHTML()}
       </div>
 
       <div class="apple-settings-row">
