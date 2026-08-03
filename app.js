@@ -3193,6 +3193,186 @@ function toggleMissedSetupsAccordion(headerEl) {
   }
 }
 
+let currentCustomAttrStatField = null;
+
+function calculateCustomAttributeStats(attrName) {
+  const executedEntries = entries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
+  const valueMap = {};
+
+  executedEntries.forEach(entry => {
+    if (!entry.customAttributes) return;
+    const rawVal = entry.customAttributes[attrName];
+    if (rawVal === undefined || rawVal === null || String(rawVal).trim() === '') return;
+
+    const valStr = String(rawVal).trim();
+    if (!valueMap[valStr]) {
+      valueMap[valStr] = {
+        name: valStr,
+        count: 0,
+        passed: 0,
+        failed: 0,
+        grossProfit: 0,
+        grossLoss: 0,
+        netPL: 0,
+        winRate: 0,
+        profitFactor: 0
+      };
+    }
+
+    const item = valueMap[valStr];
+    item.count += 1;
+
+    const plRaw = entry.customAttributes['P&L'];
+    const plVal = typeof plRaw === 'number' ? plRaw : parsePL(String(plRaw || ''));
+
+    item.netPL += plVal;
+    if (plVal > 0) {
+      item.passed += 1;
+      item.grossProfit += plVal;
+    } else if (plVal < 0) {
+      item.failed += 1;
+      item.grossLoss += Math.abs(plVal);
+    } else {
+      if (entry.status === 'PASSED') item.passed += 1;
+      if (entry.status === 'FAILED') item.failed += 1;
+    }
+  });
+
+  const resultList = Object.values(valueMap).map(item => {
+    item.winRate = item.count > 0 ? (item.passed / item.count) * 100 : 0;
+    item.profitFactor = item.grossLoss !== 0 ? (item.grossProfit / item.grossLoss) : (item.grossProfit > 0 ? Infinity : 0);
+    return item;
+  });
+
+  resultList.sort((a, b) => b.netPL - a.netPL || b.count - a.count);
+  return resultList;
+}
+
+function generateCustomAttributeStatsHTML(isMobile = false) {
+  const availableAttrs = customAttributes.filter(attr => {
+    if (attr.name === 'Entry Price' || attr.name === 'Exit Price' || attr.name === 'Quantity' || attr.name === 'Charges' || attr.name === 'P&L') return false;
+    return true;
+  });
+
+  if (availableAttrs.length === 0) return '';
+
+  if (!currentCustomAttrStatField || !availableAttrs.some(a => a.name === currentCustomAttrStatField)) {
+    const sessionAttr = availableAttrs.find(a => a.name.toLowerCase() === 'session');
+    currentCustomAttrStatField = sessionAttr ? sessionAttr.name : availableAttrs[0].name;
+  }
+
+  const statList = calculateCustomAttributeStats(currentCustomAttrStatField);
+
+  let optionsHtml = '';
+  availableAttrs.forEach(attr => {
+    const selected = attr.name === currentCustomAttrStatField ? 'selected' : '';
+    optionsHtml += `<option value="${attr.name}" ${selected}>${attr.name}</option>`;
+  });
+
+  let rowsHtml = '';
+  statList.forEach((item, idx) => {
+    const plClass = item.netPL >= 0 ? 'bull' : 'bear';
+    const pfStr = item.profitFactor === Infinity ? '∞' : (item.profitFactor > 0 ? item.profitFactor.toFixed(2) + 'x' : '0.00x');
+
+    if (isMobile) {
+      rowsHtml += `
+        <div class="custom-attr-mobile-card" style="background: rgba(255, 255, 255, 0.025); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--text-muted); font-size: 11px; font-weight: 600;">#${idx + 1}</span>
+              <span>${item.name}</span>
+            </div>
+            <div class="${plClass}" style="font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums;">
+              ₹${item.netPL >= 0 ? '+' : ''}${item.netPL.toLocaleString()}
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="background: rgba(255, 255, 255, 0.05); padding: 2px 8px; border-radius: 6px; font-weight: 600; color: var(--text-main); border: 1px solid var(--border-color);">${item.count} trades</span>
+              <span style="color: var(--text-muted); font-size: 10.5px;">(${item.passed}W / ${item.failed}L)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; color: var(--text-muted);">PF: <strong style="color: var(--text-main);">${pfStr}</strong></span>
+              <span style="background: rgba(16, 185, 129, 0.14); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px;">${item.winRate.toFixed(1)}% WR</span>
+            </div>
+          </div>
+          <div style="width: 100%; height: 4px; background: rgba(255, 255, 255, 0.06); border-radius: 2px; overflow: hidden;">
+            <div style="width: ${item.winRate}%; height: 100%; background: linear-gradient(90deg, #10B981, #34D399); border-radius: 2px;"></div>
+          </div>
+        </div>
+      `;
+    } else {
+      rowsHtml += `
+        <tr>
+          <td style="font-weight:700; color:var(--text-muted); width:40px;">#${idx + 1}</td>
+          <td style="font-weight:600; color:var(--text-main);">${item.name}</td>
+          <td class="${plClass}" style="font-weight:700; text-align:right; font-variant-numeric: tabular-nums;">₹${item.netPL >= 0 ? '+' : ''}${item.netPL.toLocaleString()}</td>
+          <td style="text-align:right; color:var(--text-secondary);">${item.count} trades</td>
+          <td style="text-align:right; color:var(--text-secondary);">${pfStr}</td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex; flex-direction:column; align-items:flex-end; gap:3px;">
+              <span style="font-weight:600; color:var(--color-bull);">${item.winRate.toFixed(1)}%</span>
+              <div style="width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:1.5px; overflow:hidden;">
+                <div style="width:${item.winRate}%; height:100%; background:var(--color-bull);"></div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+  });
+
+  if (statList.length === 0) {
+    rowsHtml = isMobile 
+      ? `<div style="text-align:center; color:var(--text-muted); font-size:12px; padding:16px;">No trade data logged for ${currentCustomAttrStatField}.</div>`
+      : `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">No trade data logged for ${currentCustomAttrStatField}.</td></tr>`;
+  }
+
+  const tableBodyOrList = isMobile 
+    ? rowsHtml 
+    : `<table class="stats-leaderboard-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>${currentCustomAttrStatField} Value</th>
+            <th style="text-align:right;">Net P&L</th>
+            <th style="text-align:right;">Trades</th>
+            <th style="text-align:right;">Profit Factor</th>
+            <th style="text-align:right;">Win Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>`;
+
+  return `
+    <div class="stats-section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; ${isMobile ? 'margin: 16px 0 10px;' : ''}">
+      <span>Custom Attribute Performance</span>
+      <div style="display:flex; align-items:center; gap:8px; ${isMobile ? 'width: 100%; justify-content: space-between;' : ''}">
+        <span style="font-size:12px; font-weight:500; color:var(--text-muted);">Field:</span>
+        <select class="input-select" style="font-size:12px; padding:5px 24px 5px 12px; width:auto; border-radius:6px; background:rgba(255,255,255,0.04); border:1px solid var(--border-color);" onchange="switchCustomAttrStatField(this.value)">
+          ${optionsHtml}
+        </select>
+      </div>
+    </div>
+    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:${isMobile ? '16px' : '14px'}; padding:${isMobile ? '12px' : '20px'}; margin-bottom:${isMobile ? '16px' : '24px'}; ${isMobile ? '' : 'overflow-x:auto;'}">
+      ${tableBodyOrList}
+    </div>
+  `;
+}
+
+function switchCustomAttrStatField(val) {
+  currentCustomAttrStatField = val;
+  if (currentDesktopView === 'stats' || currentDesktopView === 'dashboard') {
+    renderDesktopStats();
+  }
+  const mobileStats = document.getElementById('mobile-stats-view');
+  if (mobileStats && mobileStats.style.display !== 'none') {
+    renderMobileStats();
+  }
+}
+
 function renderJournalStatsTab(isMobile = false) {
   const stats = calculateJournalStats();
 
@@ -3518,12 +3698,15 @@ function renderJournalStatsTab(isMobile = false) {
     </div>
   `;
 
+  const customAttrHtml = generateCustomAttributeStatsHTML(isMobile);
+
   return `
     <div style="display:flex; flex-direction:column; gap:${isMobile ? '20px' : '32px'}; padding: ${isMobile ? '0 10px 24px' : '0 24px 40px'}; max-width:1200px; margin:0 auto;">
       ${equityCurveCardHtml}
       ${kpiHtml}
       ${calendarHtml}
       ${leaderboardHtml}
+      ${customAttrHtml}
       ${missedHtml}
       ${timeAnalyticsHtml}
       ${exportHtml}
