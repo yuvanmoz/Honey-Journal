@@ -59,6 +59,9 @@
             <div class="sidebar-item" id="nav-d-calendar" onclick="switchDesktopView('calendar')" title="Calendar">
               <i class="fa-solid fa-calendar-days"></i> <span>Calendar</span>
             </div>
+            <div class="sidebar-item" id="nav-d-coach" onclick="switchDesktopView('coach')" title="Mamba AI Mentor">
+              <i class="fa-solid fa-brain"></i> <span>Mamba AI</span>
+            </div>
           </nav>
         </div>
 
@@ -162,6 +165,11 @@
             <!-- Dynamically populated sub-gallery -->
           </div>
 
+          <!-- Mamba AI Coach View Pane -->
+          <div class="coach-container" id="desktop-coach-view" style="display: none; height: 100%;">
+            <!-- Coach loads dynamically -->
+          </div>
+
           <!-- Settings Pane -->
           <div class="settings-container" id="desktop-settings-view" style="display: none;">
             <!-- Settings loads dynamically -->
@@ -174,6 +182,9 @@
         <div class="detail-header">
           <div style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Setup Details</div>
           <div class="detail-actions-right">
+            <button class="btn-icon" id="desktop-ai-btn" onclick="analyzeActiveEntryWithAI('desktop')" title="Analyze with Mamba AI" style="color: var(--accent-gold); padding: 6px;">
+              <i class="fa-solid fa-brain"></i>
+            </button>
             <button class="btn-icon" id="desktop-save-btn" onclick="manualSave()" title="Save Entry" style="color: var(--accent-olive); padding: 6px;">
               <i class="fa-solid fa-floppy-disk"></i>
             </button>
@@ -305,6 +316,11 @@
               <!-- Dashboard widgets load dynamically -->
             </div>
 
+            <!-- Mobile Coach View -->
+            <div class="coach-container" id="mobile-coach-view" style="display: none; height: 100%;">
+              <!-- Coach loads dynamically -->
+            </div>
+
             <!-- Mobile Settings/More View -->
             <div class="settings-container" id="mobile-more-view" style="display: none;">
               <!-- Settings/More loads dynamically -->
@@ -329,7 +345,10 @@
               <i class="fa-solid fa-calendar-days"></i>
               <span>Calendar</span>
             </div>
-
+            <div class="phone-nav-item" id="nav-m-coach" onclick="switchMobileView('coach')">
+              <i class="fa-solid fa-brain"></i>
+              <span>Mamba AI</span>
+            </div>
             <div class="phone-nav-item" id="nav-m-more" onclick="switchMobileView('more')">
               <i class="fa-solid fa-gear"></i>
               <span>Settings</span>
@@ -344,6 +363,7 @@
             <i class="fa-solid fa-chevron-left" style="cursor: pointer;" onclick="closeMobileDetail()"></i>
             <div class="phone-detail-title" id="mobile-detail-title-header">Setup Details</div>
             <div style="display: flex; gap: 14px; align-items: center;">
+              <i class="fa-solid fa-brain" id="mobile-ai-btn" style="color: var(--accent-gold); cursor: pointer;" onclick="analyzeActiveEntryWithAI('mobile')" title="Analyze with Mamba AI"></i>
               <i class="fa-solid fa-floppy-disk" id="mobile-save-btn" style="color: var(--accent-olive); cursor: pointer;" onclick="manualSave()" title="Save Entry"></i>
               <i class="fa-solid fa-trash-can" style="color: var(--color-bear); cursor: pointer;" onclick="deleteActiveEntry()"></i>
               <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeMobileDetail()"></i>

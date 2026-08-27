@@ -25,6 +25,16 @@ let currentProfile = localStorage.getItem('honey_journal_current_profile') || nu
 let profilesList = JSON.parse(localStorage.getItem('honey_journal_profiles_list') || '["NIFTY"]');
 let isPortalManageMode = false; // Tracks if we are in delete-profiles mode
 
+// Mamba AI & Gemini API State (synced via Syncthing)
+let aiConfig = {
+  apiKey: localStorage.getItem('honey_journal_gemini_api_key') || '',
+  model: localStorage.getItem('honey_journal_gemini_model') || 'gemini-3.5-flash-lite',
+  customModel: localStorage.getItem('honey_journal_gemini_custom_model') || '',
+  persona: 'mamba'
+};
+let aiChatHistory = [];
+let isAITyping = false;
+
 function getProfilePath(...parts) {
   if (storagePath) {
     if (currentProfile) {
@@ -850,6 +860,10 @@ async function loadDatabase() {
           console.warn('localStorage full even after image strip on load mirror:', e2);
         }
       }
+
+      // Load Syncthing-synced AI config and chat history
+      await loadAIConfigFromDisk();
+      await loadAIChatHistoryFromDisk();
       return;
 
     } catch (err) {
@@ -876,6 +890,9 @@ async function loadDatabase() {
   if (!localEntries)      localStorage.setItem(prefix + 'entries', JSON.stringify(entries));
   if (!localTags)         localStorage.setItem(prefix + 'tags', JSON.stringify(tags));
   if (!localCustomAttrs)  localStorage.setItem(prefix + 'custom_attrs', JSON.stringify(customAttributes));
+
+  await loadAIConfigFromDisk();
+  await loadAIChatHistoryFromDisk();
 
   // Migrate entries: old single-image string → images array, and status based on P&L
   entries.forEach(e => {
@@ -1530,8 +1547,9 @@ function switchDesktopView(view) {
   const calendarView = document.getElementById('desktop-calendar-view');
   const statsView = document.getElementById('desktop-stats-view');
   const settingsView = document.getElementById('desktop-settings-view');
+  const coachView = document.getElementById('desktop-coach-view');
 
-  // Hide header actions on dashboard/calendar/statistics/settings views to prevent clutter
+  // Hide header actions on dashboard/calendar/statistics/settings/coach views to prevent clutter
   const isPatternsView = (view === 'patterns');
   if (tabsContainer) tabsContainer.style.display = isPatternsView ? 'flex' : 'none';
   if (sortDropdown) sortDropdown.style.display = isPatternsView ? 'inline-block' : 'none';
@@ -1543,6 +1561,7 @@ function switchDesktopView(view) {
   calendarView.style.display = 'none';
   statsView.style.display = 'none';
   settingsView.style.display = 'none';
+  if (coachView) coachView.style.display = 'none';
   
   const subGalleryView = document.getElementById('desktop-pattern-subgallery-view');
   if (subGalleryView) subGalleryView.style.display = 'none';
@@ -1572,6 +1591,12 @@ function switchDesktopView(view) {
     titleEl.textContent = 'Dashboard';
     statsView.style.display = 'block';
     renderDesktopStats();
+  } else if (view === 'coach') {
+    titleEl.textContent = 'Mamba AI Mentor';
+    if (coachView) {
+      coachView.style.display = 'flex';
+      renderDesktopCoach();
+    }
   }
 
   renderDesktopSidebar();
@@ -3921,6 +3946,76 @@ function renderDesktopSettings() {
       </div>
     </div>
 
+    <div class="apple-settings-group-title">Mamba AI Mentor & Gemini API</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row" style="flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="apple-settings-icon" style="background: linear-gradient(135deg, #c9a227, #f59e0b);">
+              <i class="fa-solid fa-brain" style="color: #000;"></i>
+            </div>
+            <div class="apple-settings-info">
+              <span class="apple-settings-title">Google Gemini API Key</span>
+              <span class="apple-settings-desc">Private & Syncthing-synced for Kobe Bryant AI Coaching</span>
+            </div>
+          </div>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size: 11px; color: var(--accent-gold); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+            Get Free Key <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 9px;"></i>
+          </a>
+        </div>
+        
+        <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+          <div style="position: relative; flex: 1;">
+            <input type="password" id="desktop-gemini-api-key" class="input-text" style="width: 100%; font-family: monospace; font-size: 12px; padding-right: 36px;" placeholder="AIzaSy..." value="${escapeHtml(aiConfig.apiKey || '')}">
+            <button type="button" onclick="toggleApiKeyVisibility('desktop-gemini-api-key', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 4px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Model:</span>
+            <select id="desktop-gemini-model" class="input-select" style="font-size: 12px; padding: 4px 24px 4px 10px; width: auto;" onchange="handleModelSelectChange(this.value, 'desktop')">
+              <option value="gemini-3.5-flash-lite" ${aiConfig.model === 'gemini-3.5-flash-lite' ? 'selected' : ''}>Gemini 3.5 Flash Lite (Recommended)</option>
+              <option value="gemini-3.1-flash-lite" ${aiConfig.model === 'gemini-3.1-flash-lite' ? 'selected' : ''}>Gemini 3.1 Flash Lite</option>
+              <option value="custom" ${aiConfig.model !== 'gemini-3.5-flash-lite' && aiConfig.model !== 'gemini-3.1-flash-lite' ? 'selected' : ''}>Custom Model ID...</option>
+            </select>
+          </div>
+          
+          <div id="desktop-custom-model-wrapper" style="display: ${aiConfig.model !== 'gemini-3.5-flash-lite' && aiConfig.model !== 'gemini-3.1-flash-lite' ? 'block' : 'none'};">
+            <input type="text" id="desktop-gemini-custom-model" class="input-text" style="font-size: 12px; padding: 4px 10px; width: 180px;" placeholder="e.g. gemini-2.5-flash-lite" value="${escapeHtml(aiConfig.customModel || aiConfig.model || '')}">
+          </div>
+
+          <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
+            <button class="btn-secondary" style="font-size: 11px; padding: 4px 14px; border-radius: 100px;" id="desktop-test-api-btn" onclick="testGeminiConnection('desktop')">
+              <i class="fa-solid fa-plug"></i> Test Connection
+            </button>
+            <button class="btn-primary" style="font-size: 11px; padding: 4px 16px; border-radius: 100px;" onclick="saveGeminiSettingsFromUI('desktop')">
+              <i class="fa-solid fa-floppy-disk"></i> Save Key
+            </button>
+          </div>
+        </div>
+
+        <div id="desktop-api-test-status" style="font-size: 11.5px; display: none; margin-top: 4px; padding: 6px 10px; border-radius: 6px;"></div>
+      </div>
+
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #8e8e93;">
+            <i class="fa-solid fa-trash-can"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title">Clear AI Chat History</span>
+            <span class="apple-settings-desc">Reset Mamba AI conversation logs for workspace: <strong style="color:var(--accent-gold);">${currentProfile || 'Default'}</strong></span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 11px; padding: 4px 12px; border-radius: 100px; color: var(--color-bear);" onclick="clearAIChatHistoryWithConfirm()">Clear History</button>
+        </div>
+      </div>
+    </div>
+
     <div class="apple-settings-group-title">Local Folder Connections</div>
     <div class="apple-settings-group">
       <div class="apple-settings-row">
@@ -5652,6 +5747,7 @@ function switchMobileView(view) {
   const stats = document.getElementById('mobile-stats-view');
   const dashboard = document.getElementById('mobile-dashboard-view');
   const more = document.getElementById('mobile-more-view');
+  const coach = document.getElementById('mobile-coach-view');
   const fab = document.getElementById('mobile-fab');
 
   // Hide mobile header options for non-patterns views
@@ -5665,6 +5761,7 @@ function switchMobileView(view) {
   stats.style.display = 'none';
   dashboard.style.display = 'none';
   more.style.display = 'none';
+  if (coach) coach.style.display = 'none';
 
   const subGalleryView = document.getElementById('mobile-pattern-subgallery-view');
   if (subGalleryView) subGalleryView.style.display = 'none';
@@ -5690,6 +5787,12 @@ function switchMobileView(view) {
     headerTitle.textContent = 'Settings';
     more.style.display = 'block';
     renderMobileMore();
+  } else if (view === 'coach') {
+    headerTitle.textContent = 'Mamba AI Mentor';
+    if (coach) {
+      coach.style.display = 'flex';
+      renderMobileCoach();
+    }
   }
 }
 
@@ -6177,6 +6280,76 @@ function renderMobileMore() {
         <div class="apple-settings-row-right">
           <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" onclick="chooseStorageFolder()">Change</button>
           <i class="fa-solid fa-chevron-right apple-settings-chevron" style="margin-left: 2px;"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="apple-settings-group-title">Mamba AI & Gemini API</div>
+    <div class="apple-settings-group">
+      <div class="apple-settings-row" style="flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="apple-settings-icon" style="background: linear-gradient(135deg, #c9a227, #f59e0b); width: 26px; height: 26px; font-size: 11px;">
+              <i class="fa-solid fa-brain" style="color: #000;"></i>
+            </div>
+            <div class="apple-settings-info">
+              <span class="apple-settings-title" style="font-size: 12px;">Gemini API Key</span>
+              <span class="apple-settings-desc" style="font-size: 10px;">Synced via Syncthing</span>
+            </div>
+          </div>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size: 10.5px; color: var(--accent-gold); text-decoration: none; font-weight: 600;">
+            Free Key <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 8px;"></i>
+          </a>
+        </div>
+        
+        <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
+          <div style="position: relative; flex: 1;">
+            <input type="password" id="mobile-gemini-api-key" class="input-text" style="width: 100%; font-family: monospace; font-size: 11.5px; padding-right: 32px;" placeholder="AIzaSy..." value="${escapeHtml(aiConfig.apiKey || '')}">
+            <button type="button" onclick="toggleApiKeyVisibility('mobile-gemini-api-key', this)" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 2px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 11px; color: var(--text-secondary); font-weight: 500;">Model:</span>
+            <select id="mobile-gemini-model" class="input-select" style="font-size: 11px; padding: 3px 20px 3px 8px; width: auto;" onchange="handleModelSelectChange(this.value, 'mobile')">
+              <option value="gemini-3.5-flash-lite" ${aiConfig.model === 'gemini-3.5-flash-lite' ? 'selected' : ''}>Gemini 3.5 Flash Lite</option>
+              <option value="gemini-3.1-flash-lite" ${aiConfig.model === 'gemini-3.1-flash-lite' ? 'selected' : ''}>Gemini 3.1 Flash Lite</option>
+              <option value="custom" ${aiConfig.model !== 'gemini-3.5-flash-lite' && aiConfig.model !== 'gemini-3.1-flash-lite' ? 'selected' : ''}>Custom ID...</option>
+            </select>
+          </div>
+          
+          <div id="mobile-custom-model-wrapper" style="display: ${aiConfig.model !== 'gemini-3.5-flash-lite' && aiConfig.model !== 'gemini-3.1-flash-lite' ? 'block' : 'none'};">
+            <input type="text" id="mobile-gemini-custom-model" class="input-text" style="font-size: 11px; padding: 4px 8px; width: 100%;" placeholder="e.g. gemini-2.5-flash-lite" value="${escapeHtml(aiConfig.customModel || aiConfig.model || '')}">
+          </div>
+
+          <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px;">
+            <button class="btn-secondary" style="font-size: 10px; padding: 4px 10px; border-radius: 100px;" id="mobile-test-api-btn" onclick="testGeminiConnection('mobile')">
+              <i class="fa-solid fa-plug"></i> Test
+            </button>
+            <button class="btn-primary" style="font-size: 10px; padding: 4px 12px; border-radius: 100px;" onclick="saveGeminiSettingsFromUI('mobile')">
+              <i class="fa-solid fa-floppy-disk"></i> Save
+            </button>
+          </div>
+        </div>
+
+        <div id="mobile-api-test-status" style="font-size: 11px; display: none; margin-top: 4px; padding: 5px 8px; border-radius: 6px;"></div>
+      </div>
+
+      <div class="apple-settings-row">
+        <div class="apple-settings-row-left">
+          <div class="apple-settings-icon" style="background-color: #8e8e93; width: 26px; height: 26px; font-size: 11px;">
+            <i class="fa-solid fa-trash-can"></i>
+          </div>
+          <div class="apple-settings-info">
+            <span class="apple-settings-title" style="font-size: 12px;">Clear Chat History</span>
+            <span class="apple-settings-desc" style="font-size: 10px;">Reset Mamba logs for ${currentProfile || 'Default'}</span>
+          </div>
+        </div>
+        <div class="apple-settings-row-right">
+          <button class="btn-secondary" style="font-size: 10px; padding: 3px 8px; border-radius: 100px; color: var(--color-bear);" onclick="clearAIChatHistoryWithConfirm()">Clear</button>
         </div>
       </div>
     </div>
@@ -7135,3 +7308,786 @@ function savePlaybookDescription(platform) {
     showToast('Description saved successfully!', 'success');
   }
 }
+
+// ==========================================================================
+// MAMBA AI COACH & GOOGLE GEMINI TRADING MENTOR ENGINE
+// ==========================================================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function toggleApiKeyVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+  } else {
+    input.type = 'password';
+    btn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+  }
+}
+
+function handleModelSelectChange(val, platform) {
+  const wrapper = document.getElementById(`${platform}-custom-model-wrapper`);
+  if (wrapper) {
+    wrapper.style.display = val === 'custom' ? 'block' : 'none';
+  }
+}
+
+async function loadAIConfigFromDisk() {
+  if (window.__TAURI__ && storagePath) {
+    const invoke = getTauriInvoke();
+    try {
+      const content = await invoke('fs_read_text_file', { path: joinPath(storagePath, 'ai_config.json') });
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object') {
+        aiConfig = { ...aiConfig, ...parsed };
+        if (aiConfig.apiKey) localStorage.setItem('honey_journal_gemini_api_key', aiConfig.apiKey);
+        if (aiConfig.model) localStorage.setItem('honey_journal_gemini_model', aiConfig.model);
+        if (aiConfig.customModel) localStorage.setItem('honey_journal_gemini_custom_model', aiConfig.customModel);
+      }
+    } catch {
+      // Fall back to localStorage
+    }
+  }
+}
+
+async function saveAIConfigToDisk() {
+  localStorage.setItem('honey_journal_gemini_api_key', aiConfig.apiKey || '');
+  localStorage.setItem('honey_journal_gemini_model', aiConfig.model || 'gemini-3.5-flash-lite');
+  localStorage.setItem('honey_journal_gemini_custom_model', aiConfig.customModel || '');
+  if (window.__TAURI__ && storagePath) {
+    const invoke = getTauriInvoke();
+    await invoke('fs_write_text_file', {
+      path: joinPath(storagePath, 'ai_config.json'),
+      content: JSON.stringify(aiConfig, null, 2)
+    }).catch(err => console.error('Failed to save ai_config.json to disk:', err));
+  }
+}
+
+async function loadAIChatHistoryFromDisk() {
+  const profileKey = currentProfile || 'default';
+  const localSaved = localStorage.getItem(`honey_journal_ai_chats_${profileKey}`);
+  if (localSaved) {
+    try { aiChatHistory = JSON.parse(localSaved) || []; } catch { aiChatHistory = []; }
+  } else {
+    aiChatHistory = [];
+  }
+  
+  if (window.__TAURI__ && storagePath && currentProfile) {
+    const invoke = getTauriInvoke();
+    try {
+      const chatPath = getProfilePath('ai_chats.json');
+      const content = await invoke('fs_read_text_file', { path: chatPath });
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        aiChatHistory = parsed;
+        localStorage.setItem(`honey_journal_ai_chats_${profileKey}`, JSON.stringify(aiChatHistory));
+      }
+    } catch {
+      // No chat history yet
+    }
+  }
+}
+
+async function saveAIChatHistoryToDisk() {
+  const profileKey = currentProfile || 'default';
+  localStorage.setItem(`honey_journal_ai_chats_${profileKey}`, JSON.stringify(aiChatHistory));
+  if (window.__TAURI__ && storagePath && currentProfile) {
+    const invoke = getTauriInvoke();
+    const chatPath = getProfilePath('ai_chats.json');
+    await invoke('fs_write_text_file', {
+      path: chatPath,
+      content: JSON.stringify(aiChatHistory, null, 2)
+    }).catch(err => console.error('Failed to save ai_chats.json to disk:', err));
+  }
+}
+
+async function saveGeminiSettingsFromUI(platform) {
+  const keyInput = document.getElementById(`${platform}-gemini-api-key`);
+  const modelSelect = document.getElementById(`${platform}-gemini-model`);
+  const customModelInput = document.getElementById(`${platform}-gemini-custom-model`);
+  
+  if (!keyInput) return;
+  const newKey = keyInput.value.trim();
+  const selectedModel = modelSelect ? modelSelect.value : 'gemini-3.5-flash-lite';
+  const customModelVal = customModelInput ? customModelInput.value.trim() : '';
+
+  aiConfig.apiKey = newKey;
+  aiConfig.model = selectedModel === 'custom' ? (customModelVal || 'gemini-3.5-flash-lite') : selectedModel;
+  aiConfig.customModel = customModelVal;
+
+  await saveAIConfigToDisk();
+  showToast('Gemini API configuration saved & synced!', 'success');
+  
+  if (currentDesktopView === 'settings') renderDesktopSettings();
+  if (currentMobileView === 'more') renderMobileMore();
+  if (currentDesktopView === 'coach') renderDesktopCoach();
+  if (currentMobileView === 'coach') renderMobileCoach();
+}
+
+async function testGeminiApiKey(testKey, testModel) {
+  const modelToUse = (testModel === 'custom' && aiConfig.customModel) 
+    ? aiConfig.customModel.trim() 
+    : (testModel || 'gemini-3.5-flash-lite');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelToUse)}:generateContent?key=${encodeURIComponent(testKey.trim())}`;
+  
+  const payload = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: 'Respond in one short sentence as Kobe Bryant: Are you ready to coach trading with Mamba Mentality?' }]
+      }
+    ]
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errJson = await response.json().catch(() => ({}));
+    const msg = errJson.error ? errJson.error.message : `HTTP ${response.status} ${response.statusText}`;
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Connected successfully!';
+  return text;
+}
+
+async function testGeminiConnection(platform) {
+  const keyInput = document.getElementById(`${platform}-gemini-api-key`);
+  const modelSelect = document.getElementById(`${platform}-gemini-model`);
+  const customModelInput = document.getElementById(`${platform}-gemini-custom-model`);
+  const statusEl = document.getElementById(`${platform}-api-test-status`);
+  const testBtn = document.getElementById(`${platform}-test-api-btn`);
+
+  if (!keyInput || !keyInput.value.trim()) {
+    showToast('Please enter an API key first.', 'warning');
+    return;
+  }
+
+  const testKey = keyInput.value.trim();
+  const selectedModel = modelSelect ? modelSelect.value : 'gemini-3.5-flash-lite';
+  const testModel = selectedModel === 'custom' ? (customModelInput ? customModelInput.value.trim() : 'gemini-3.5-flash-lite') : selectedModel;
+
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testing...';
+  }
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.background = 'rgba(255, 255, 255, 0.05)';
+    statusEl.style.color = 'var(--text-secondary)';
+    statusEl.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Connecting to ${testModel}...`;
+  }
+
+  try {
+    const reply = await testGeminiApiKey(testKey, testModel);
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(16, 185, 129, 0.12)';
+      statusEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+      statusEl.style.color = 'var(--color-bull)';
+      statusEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> <strong>Success!</strong> ${escapeHtml(reply)}`;
+    }
+    showToast('Gemini API connection verified!', 'success');
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(239, 68, 68, 0.12)';
+      statusEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      statusEl.style.color = 'var(--color-bear)';
+      statusEl.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> <strong>Connection Failed:</strong> ${escapeHtml(err.message)}`;
+    }
+    showToast('Connection failed: ' + err.message, 'error');
+  } finally {
+    if (testBtn) {
+      testBtn.disabled = false;
+      testBtn.innerHTML = '<i class="fa-solid fa-plug"></i> Test Connection';
+    }
+  }
+}
+
+function clearAIChatHistoryWithConfirm() {
+  if (confirm(`Clear all Mamba AI conversation history for workspace "${currentProfile || 'Default'}"?`)) {
+    aiChatHistory = [];
+    saveAIChatHistoryToDisk();
+    showToast('AI Chat History cleared.', 'info');
+    if (currentDesktopView === 'coach') renderDesktopCoach();
+    if (currentMobileView === 'coach') renderMobileCoach();
+  }
+}
+
+function formatAIMarkdown(rawText) {
+  if (!rawText) return '';
+  let text = escapeHtml(rawText);
+  
+  // Bold **text**
+  text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Italic *text* or _text_
+  text = text.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
+  text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+  
+  // Inline code `code`
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  
+  // Headers ### text
+  text = text.replace(/^### (.*$)/gim, '<h4 style="color:var(--text-main); margin:8px 0 4px; font-size:14px; font-weight:700;">$1</h4>');
+  text = text.replace(/^## (.*$)/gim, '<h3 style="color:var(--accent-gold); margin:10px 0 4px; font-size:15px; font-weight:800;">$1</h3>');
+  text = text.replace(/^# (.*$)/gim, '<h2 style="color:var(--accent-gold); margin:12px 0 6px; font-size:16px; font-weight:800;">$1</h2>');
+
+  // Blockquotes > text
+  text = text.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+  
+  // Bullet lists (- or * )
+  text = text.replace(/^\s*[\-\*]\s+(.*)$/gim, '<li>$1</li>');
+  text = text.replace(/(<li>.*<\/li>)/gms, '<ul>$1</ul>');
+  text = text.replace(/<\/ul>\s*<ul>/g, '');
+
+  // Numbered lists
+  text = text.replace(/^\s*(\d+)\.\s+(.*)$/gim, '<li>$2</li>');
+  
+  // Paragraphs / Newlines
+  text = text.replace(/\n\n+/g, '</p><p>');
+  text = text.replace(/\n/g, '<br>');
+  
+  return `<p>${text}</p>`;
+}
+
+function buildJournalAIContext(focusEntry = null) {
+  const stats = calculateJournalStats();
+  const executedEntries = entries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
+  const missedEntries = entries.filter(e => e.status === 'MISSED');
+
+  // Top patterns
+  const patternCounts = {};
+  entries.forEach(e => {
+    (e.patterns || []).forEach(p => {
+      if (!patternCounts[p]) patternCounts[p] = { total: 0, passed: 0, failed: 0 };
+      patternCounts[p].total++;
+      if (e.status === 'PASSED') patternCounts[p].passed++;
+      if (e.status === 'FAILED') patternCounts[p].failed++;
+    });
+  });
+  const patternSummary = Object.entries(patternCounts)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 5)
+    .map(([name, s]) => `${name}: ${s.total} trades (${s.passed} Win, ${s.failed} Loss)`)
+    .join('; ');
+
+  // Mistakes aggregation
+  const mistakeCounts = {};
+  entries.forEach(e => {
+    if (e.mistakes && e.mistakes.trim()) {
+      const mist = e.mistakes.trim();
+      mistakeCounts[mist] = (mistakeCounts[mist] || 0) + 1;
+    }
+  });
+  const mistakesSummary = Object.entries(mistakeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([m, cnt]) => `"${m}" (${cnt}x)`)
+    .join(', ');
+
+  // Recent 5 trades
+  const recentTrades = [...entries]
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .slice(0, 5)
+    .map(e => {
+      const pl = e.customAttributes ? (e.customAttributes['P&L'] ?? '0') : '0';
+      return `- Date: ${e.date || 'N/A'}, Patterns: ${(e.patterns || []).join('/') || 'None'}, Bias: ${e.bias || 'N/A'}, Status: ${e.status || 'MISSED'}, P&L: ₹${pl}, Notes: "${(e.notes || '').slice(0, 80)}", Mistakes: "${(e.mistakes || '').slice(0, 80)}"`;
+    })
+    .join('\n');
+
+  let ctx = `
+=== CURRENT TRADER PROFILE & PERFORMANCE SNAPSHOT ===
+- Active Workspace: ${currentProfile || 'Default'}
+- Total Setups Logged: ${entries.length} (Executed: ${executedEntries.length}, Missed: ${missedEntries.length})
+- Win Rate: ${stats.winRate.toFixed(1)}% (${stats.winningTradesCount} Wins / ${stats.losingTradesCount} Losses)
+- Profit Factor: ${stats.profitFactor === Infinity ? 'Infinite' : stats.profitFactor.toFixed(2)}
+- Net P&L: ₹${stats.netPL.toLocaleString()} (Gross Profit: ₹${stats.grossProfit.toLocaleString()}, Gross Loss: ₹${stats.grossLoss.toLocaleString()})
+- Expectancy per trade: ₹${stats.expectancy.toFixed(0)}
+- Top Patterns Tested: ${patternSummary || 'None logged'}
+- Frequently Logged Mistakes: ${mistakesSummary || 'No specific mistakes noted yet'}
+
+=== RECENT 5 LOGGED TRADES ===
+${recentTrades || 'No recent trades logged yet'}
+`;
+
+  if (focusEntry) {
+    const fpl = focusEntry.customAttributes ? (focusEntry.customAttributes['P&L'] ?? '0') : '0';
+    ctx += `
+=== FOCUSED TRADE SETUP BEING REVIEWED ===
+- Setup ID: ${focusEntry.id}
+- Date: ${focusEntry.date || 'N/A'}
+- Patterns: ${(focusEntry.patterns || []).join(', ') || 'None'}
+- Bias: ${focusEntry.bias || 'N/A'}
+- Status/Outcome: ${focusEntry.status || 'MISSED'}
+- P&L: ₹${fpl}
+- Notes: "${focusEntry.notes || 'None'}"
+- Mistakes Logged: "${focusEntry.mistakes || 'None'}"
+- Chart Images: ${(focusEntry.images || []).length} screenshot(s) attached.
+`;
+  }
+
+  return ctx.trim();
+}
+
+async function callGeminiAPI(messages, journalContext) {
+  const modelToUse = (aiConfig.model === 'custom' && aiConfig.customModel) 
+    ? aiConfig.customModel.trim() 
+    : (aiConfig.model || 'gemini-3.5-flash-lite');
+
+  const apiKey = aiConfig.apiKey ? aiConfig.apiKey.trim() : '';
+  if (!apiKey) {
+    throw new Error('Please configure and save your Gemini API key in Settings first.');
+  }
+
+  const systemPrompt = `You are Kobe Bryant — trading psychology mentor, performance coach, and disciplined master of the craft. Your voice, demeanor, and philosophy embody the MAMBA MENTALITY.
+
+### YOUR PHILOSOPHY & IDENTITY:
+1. **Relentless Focus & Preparation**: "Everything negative — pressure, challenges — is all an opportunity for me to rise." Trading is not gambling. It is an uncompromising discipline of repetition, patience, risk control, and emotional mastery.
+2. **Obsession with the Process, Not the Outcome**: You judge a trade by whether the rules were followed with precision, NOT whether it made money. A profitable trade that broke rules is a bad trade. A losing trade taken according to edge and risk parameters is a great trade.
+3. **Extreme Accountability & Tough Love**: Never allow the trader to make excuses, blame the market, market makers, or bad luck. "If you don't believe in yourself, who will? But belief without preparation is delusion." Call them out constructively when they overtrade, chase, hesitate, or move stops.
+4. **Conquering Hesitation & Psychological Fears**:
+   - Hesitation is fear of losing or lack of trust in the system. Teach them to accept the predefined risk before pulling the trigger.
+   - FOMO and revenge trading are emotional weakness. When a trade is missed, the mamba resets: "Job's not finished. Next play."
+5. **Supportive Brother & Mentor**: When the trader is in pain, venting after a brutal drawdown or feeling down, listen with genuine respect for the grind. Validate their struggle, remind them of why they started, rebuild their psychological fortress, and give them actionable instructions to reset.
+6. **Journal Mastery**: You have direct access to their actual trading journal data (setups, win rate, mistakes, profit factor, recent trades). Reference their actual stats to give precise, laser-focused coaching.
+
+### COMMUNICATION STYLE:
+- Speak directly in the first person as Kobe ("Look,", "Listen to me,", "Here is what we are going to do", "Job's not finished").
+- Punchy, articulate, intense, inspiring, grounded in real execution.
+- Use clear markdown formatting with bold highlights, concise bullet points, and actionable takeaways.
+- Keep responses focused, impactful, and conversational.
+
+### LIVE TRADER JOURNAL CONTEXT:
+${journalContext}`;
+
+  const contents = messages.map(m => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.text }]
+  }));
+
+  const payload = {
+    contents: contents,
+    systemInstruction: {
+      parts: [{ text: systemPrompt }]
+    },
+    generationConfig: {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048
+    }
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelToUse)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (netErr) {
+    throw new Error(`Network error connecting to Gemini API: ${netErr.message}`);
+  }
+
+  if (!response.ok) {
+    let errorDetail = '';
+    try {
+      const errJson = await response.json();
+      errorDetail = errJson.error ? errJson.error.message : JSON.stringify(errJson);
+    } catch {
+      errorDetail = `HTTP ${response.status} ${response.statusText}`;
+    }
+    
+    // Fallback: If 400 because systemInstruction is unsupported, retry with system prompt injected in user message
+    if (response.status === 400 && errorDetail.includes('systemInstruction')) {
+      const fallbackContents = [
+        {
+          role: 'user',
+          parts: [{ text: `[System Instructions from Kobe Bryant]:\n${systemPrompt}\n\n[User message]:\n${messages[messages.length - 1].text}` }]
+        }
+      ];
+      const fallbackPayload = {
+        contents: fallbackContents,
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+      };
+      const fbResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackPayload)
+      });
+      if (fbResponse.ok) {
+        const fbData = await fbResponse.json();
+        const candidate = fbData.candidates && fbData.candidates[0];
+        if (candidate && candidate.content && candidate.content.parts) {
+          return candidate.content.parts.map(p => p.text).join('\n');
+        }
+      }
+    }
+
+    throw new Error(`Gemini API Error (${response.status}): ${errorDetail}`);
+  }
+
+  const data = await response.json();
+  const candidate = data.candidates && data.candidates[0];
+  if (candidate && candidate.content && candidate.content.parts) {
+    return candidate.content.parts.map(p => p.text).join('\n');
+  }
+
+  if (data.promptFeedback && data.promptFeedback.blockReason) {
+    throw new Error(`Response blocked by safety filter: ${data.promptFeedback.blockReason}`);
+  }
+
+  return "Job's not finished. Let's analyze the next play.";
+}
+
+async function sendCoachMessage(userText, focusEntry = null) {
+  if (!userText || !userText.trim() || isAITyping) return;
+  const cleanedText = userText.trim();
+  
+  if (!aiConfig.apiKey) {
+    showToast('Please add and save your Gemini API key in Settings first.', 'warning');
+    if (currentDesktopView === 'coach') switchDesktopView('settings');
+    else switchMobileView('more');
+    return;
+  }
+
+  // Append user message
+  const userMsgObj = {
+    role: 'user',
+    text: cleanedText,
+    timestamp: Date.now()
+  };
+  aiChatHistory.push(userMsgObj);
+  await saveAIChatHistoryToDisk();
+
+  isAITyping = true;
+  renderCoachMessages();
+
+  // Clear input
+  const desktopInput = document.getElementById('desktop-coach-input');
+  const mobileInput = document.getElementById('mobile-coach-input');
+  if (desktopInput) desktopInput.value = '';
+  if (mobileInput) mobileInput.value = '';
+
+  try {
+    const journalCtx = buildJournalAIContext(focusEntry);
+    const recentChatContext = aiChatHistory.slice(-10);
+    const replyText = await callGeminiAPI(recentChatContext, journalCtx);
+
+    const mambaMsgObj = {
+      role: 'model',
+      text: replyText,
+      timestamp: Date.now()
+    };
+    aiChatHistory.push(mambaMsgObj);
+    await saveAIChatHistoryToDisk();
+  } catch (err) {
+    console.error('Gemini error:', err);
+    const errorMsg = {
+      role: 'model',
+      text: `> ⚠️ **Mamba Coach Note:** Unable to connect to Gemini API.\n\n*Error details:* ${err.message}\n\nPlease verify your **Gemini API Key** in Settings and check your internet connection.`,
+      timestamp: Date.now()
+    };
+    aiChatHistory.push(errorMsg);
+    await saveAIChatHistoryToDisk();
+  } finally {
+    isAITyping = false;
+    renderCoachMessages();
+    scrollCoachToBottom();
+  }
+}
+
+function triggerSendCoachMessage(platform) {
+  const input = document.getElementById(`${platform}-coach-input`);
+  if (!input) return;
+  const val = input.value;
+  if (!val || !val.trim()) return;
+  sendCoachMessage(val);
+}
+
+function handleCoachInputKeydown(e, platform) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    triggerSendCoachMessage(platform);
+  }
+}
+
+function autoResizeCoachTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+}
+
+function quickPrompt(type, platform) {
+  let promptText = '';
+  if (type === 'pre_market') {
+    promptText = "Kobe, get me mentally locked in for today's trading session. Give me the Mamba pre-market mental priming, discipline check, and focus instructions.";
+  } else if (type === 'loss_reset') {
+    promptText = "I just took a frustrating loss and I feel emotional / tempted to revenge trade. Ground me right now. Break down my tape and help me reset my mind before I touch another order.";
+  } else if (type === 'journal_audit') {
+    promptText = "Audit my active journal data, win rate, and logged mistakes. Tell me brutally where I am leaking money and what specific psychological discipline I need to fix.";
+  } else if (type === 'hesitation') {
+    promptText = "I find myself hesitating to take high-probability setups because of the fear of losing money. Coach me on risk acceptance, pulling the trigger, and mamba confidence.";
+  }
+
+  if (promptText) {
+    const input = document.getElementById(`${platform}-coach-input`);
+    if (input) input.value = promptText;
+    sendCoachMessage(promptText);
+  }
+}
+
+function scrollCoachToBottom(platform = null) {
+  requestAnimationFrame(() => {
+    ['desktop', 'mobile'].forEach(plat => {
+      if (platform && plat !== platform) return;
+      const scrollEl = document.getElementById(`${plat}-coach-chat-scroll`);
+      if (scrollEl) {
+        scrollEl.scrollTop = scrollEl.scrollHeight;
+      }
+    });
+  });
+}
+
+function renderCoachMessages() {
+  if (currentDesktopView === 'coach') renderDesktopCoach();
+  if (currentMobileView === 'coach') renderMobileCoach();
+}
+
+function openAISettings(platform) {
+  if (platform === 'desktop') {
+    switchDesktopView('settings');
+  } else {
+    switchMobileView('more');
+  }
+}
+
+function renderDesktopCoach() {
+  const container = document.getElementById('desktop-coach-view');
+  if (!container) return;
+  renderCoachView(container, 'desktop');
+}
+
+function renderMobileCoach() {
+  const container = document.getElementById('mobile-coach-view');
+  if (!container) return;
+  renderCoachView(container, 'mobile');
+}
+
+function renderCoachView(container, platform) {
+  const stats = calculateJournalStats();
+  const hasApiKey = Boolean(aiConfig.apiKey && aiConfig.apiKey.trim());
+
+  let apiWarningHtml = '';
+  if (!hasApiKey) {
+    apiWarningHtml = `
+      <div class="coach-api-notice">
+        <div class="coach-api-notice-left">
+          <i class="fa-solid fa-key" style="color: var(--accent-gold); font-size: 16px;"></i>
+          <div>
+            <strong>Gemini API Key Required</strong><br>
+            <span style="color: var(--text-secondary); font-size: 11px;">Configure your free Gemini 3.5 Flash Lite API key in Settings to activate Kobe Bryant Mamba Mentality coaching.</span>
+          </div>
+        </div>
+        <button class="btn-primary" style="font-size: 11px; padding: 5px 14px; border-radius: 100px; white-space: nowrap;" onclick="openAISettings('${platform}')">
+          <i class="fa-solid fa-gear"></i> Open Settings
+        </button>
+      </div>
+    `;
+  }
+
+  let welcomeHtml = '';
+  if (aiChatHistory.length === 0) {
+    welcomeHtml = `
+      <div class="coach-welcome-card">
+        <div class="coach-welcome-header">
+          <div class="coach-welcome-avatar">
+            <i class="fa-solid fa-brain"></i>
+          </div>
+          <div>
+            <div class="coach-welcome-title">Mamba Mentality Trading Coach</div>
+            <div class="coach-welcome-motto">"Job's Not Finished. Let's Master The Tape."</div>
+          </div>
+        </div>
+        <div class="coach-welcome-body">
+          Welcome to the gym. I am connected directly to your <strong>${escapeHtml(currentProfile || 'Default')}</strong> journal. 
+          I have your win rates, logged mistakes, and setup history right here. I'm here to build your psychological fortress, eliminate hesitation, kill revenge trading, and keep you strictly disciplined to the process.
+        </div>
+        <div style="font-size: 11.5px; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
+          <i class="fa-solid fa-bolt" style="color: var(--accent-gold);"></i> Quick Coaching Sessions:
+        </div>
+        <div class="coach-quick-chips">
+          <div class="coach-chip" onclick="quickPrompt('pre_market', '${platform}')">
+            <span>🎯 Pre-Market Priming</span>
+          </div>
+          <div class="coach-chip" onclick="quickPrompt('loss_reset', '${platform}')">
+            <span>🧘 Post-Loss Reset & Vent</span>
+          </div>
+          <div class="coach-chip" onclick="quickPrompt('journal_audit', '${platform}')">
+            <span>📊 Deep Journal Audit</span>
+          </div>
+          <div class="coach-chip" onclick="quickPrompt('hesitation', '${platform}')">
+            <span>🧠 Overcoming Hesitation</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  let messagesHtml = '';
+  aiChatHistory.forEach(msg => {
+    const isUser = msg.role === 'user';
+    const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const avatarHtml = isUser 
+      ? `<div class="coach-msg-avatar user-avatar"><i class="fa-solid fa-user"></i></div>`
+      : `<div class="coach-msg-avatar mamba-avatar"><i class="fa-solid fa-brain"></i></div>`;
+
+    const formattedContent = isUser ? escapeHtml(msg.text).replace(/\n/g, '<br>') : formatAIMarkdown(msg.text);
+
+    messagesHtml += `
+      <div class="coach-msg-row ${isUser ? 'user' : 'mamba'}">
+        ${!isUser ? avatarHtml : ''}
+        <div class="coach-msg-bubble">
+          ${formattedContent}
+          <span class="coach-msg-time">${timeStr}</span>
+        </div>
+        ${isUser ? avatarHtml : ''}
+      </div>
+    `;
+  });
+
+  if (isAITyping) {
+    messagesHtml += `
+      <div class="coach-msg-row mamba">
+        <div class="coach-msg-avatar mamba-avatar"><i class="fa-solid fa-brain"></i></div>
+        <div class="coach-typing-box">
+          <div class="coach-typing-dot"></div>
+          <div class="coach-typing-dot"></div>
+          <div class="coach-typing-dot"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = `
+    <div class="coach-view-container">
+      <!-- Header -->
+      <div class="coach-header-bar">
+        <div class="coach-header-left">
+          <div class="coach-mamba-badge">
+            <i class="fa-solid fa-brain"></i>
+          </div>
+          <div class="coach-header-title-wrap">
+            <div class="coach-header-title">
+              Mamba AI Mentor 
+              <span style="font-size: 10px; background: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3); border-radius: 100px; padding: 1px 7px; font-weight: 700;">${escapeHtml(aiConfig.model || 'Gemini')}</span>
+            </div>
+            <div class="coach-header-subtitle">Kobe Bryant Trading Psychology & Tape Review</div>
+          </div>
+        </div>
+
+        <div class="coach-header-right">
+          <span class="coach-hud-pill">
+            <i class="fa-solid fa-chart-pie" style="color: var(--accent-gold);"></i> 
+            <span>${stats.winRate.toFixed(1)}% WR</span>
+            <span style="color: var(--text-muted);">|</span>
+            <span>${entries.length} Setups</span>
+          </span>
+          <button class="btn-icon" onclick="clearAIChatHistoryWithConfirm()" title="Clear Chat History" style="padding: 6px;">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+          <button class="btn-icon" onclick="openAISettings('${platform}')" title="AI Settings" style="padding: 6px;">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat Stream -->
+      <div class="coach-chat-scroll" id="${platform}-coach-chat-scroll">
+        ${apiWarningHtml}
+        ${welcomeHtml}
+        ${messagesHtml}
+      </div>
+
+      <!-- Input Area -->
+      <div class="coach-input-container">
+        <div class="coach-quick-chips" style="margin-bottom: 8px; overflow-x: auto; white-space: nowrap; padding-bottom: 2px;">
+          <div class="coach-chip" onclick="quickPrompt('pre_market', '${platform}')">🎯 Pre-Market Prep</div>
+          <div class="coach-chip" onclick="quickPrompt('loss_reset', '${platform}')">🧘 Post-Loss Reset</div>
+          <div class="coach-chip" onclick="quickPrompt('journal_audit', '${platform}')">📊 Audit Mistakes</div>
+          <div class="coach-chip" onclick="quickPrompt('hesitation', '${platform}')">🧠 Fear & Hesitation</div>
+        </div>
+
+        <div class="coach-input-inner">
+          <textarea 
+            class="coach-textarea" 
+            id="${platform}-coach-input" 
+            placeholder="Talk to Kobe Bryant... (e.g. 'I hesitated on a breakout', 'Review my session')" 
+            rows="1"
+            onkeydown="handleCoachInputKeydown(event, '${platform}')"
+            oninput="autoResizeCoachTextarea(this)"></textarea>
+          <button class="coach-send-btn" id="${platform}-coach-send-btn" onclick="triggerSendCoachMessage('${platform}')" title="Send to Mamba AI">
+            <i class="fa-solid fa-arrow-up"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  scrollCoachToBottom(platform);
+}
+
+function analyzeActiveEntryWithAI(platform) {
+  if (!activeEntryId) {
+    showToast('No active setup selected to analyze.', 'warning');
+    return;
+  }
+  const entry = entries.find(e => e.id === activeEntryId);
+  if (!entry) {
+    showToast('Setup not found.', 'error');
+    return;
+  }
+
+  // Close the detail panel
+  if (platform === 'desktop') closeDesktopDetail();
+  else closeMobileDetail();
+
+  // Switch to coach view
+  if (platform === 'desktop') switchDesktopView('coach');
+  else switchMobileView('coach');
+
+  const plVal = entry.customAttributes ? (entry.customAttributes['P&L'] ?? 0) : 0;
+  const promptText = `Kobe, I want you to review this specific trade setup with me like you're breaking down game tape.
+- Setup Date: ${entry.date || 'N/A'}
+- Bias: ${entry.bias || 'N/A'}
+- Patterns: ${(entry.patterns || []).join(', ') || 'None'}
+- Status / Outcome: ${entry.status || 'MISSED'}
+- P&L: ₹${plVal}
+- My Notes: "${entry.notes || 'None'}"
+- Logged Mistakes: "${entry.mistakes || 'None'}"
+
+Break down my execution with Mamba Mentality: Did I execute properly according to rules, where did my psychology fail or succeed, and what is the exact lesson I must take into the gym tomorrow?`;
+
+  sendCoachMessage(promptText, entry);
+}
+
