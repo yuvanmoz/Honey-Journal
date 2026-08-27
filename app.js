@@ -406,7 +406,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     let pullStartY = 0;
     let isPulling = false;
 
-    const isScrollAtTop = () => {
+    const isScrollAtTop = (target = null) => {
+      if (currentMobileView === 'coach' || (target && target.closest && target.closest('#mobile-coach-view'))) {
+        return false; // Never trigger pull-to-refresh inside AI Coach chat view!
+      }
       const contentArea = document.getElementById('mobile-content-area');
       if (contentArea) {
         return contentArea.scrollTop === 0;
@@ -415,7 +418,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     };
 
     phoneScreen.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1 && isScrollAtTop()) {
+      if (e.touches.length === 1 && isScrollAtTop(e.target)) {
         pullStartY = e.touches[0].clientY;
         isPulling = true;
       }
@@ -7573,23 +7576,26 @@ function buildJournalAIContext(focusEntry = null) {
   const executedEntries = entries.filter(e => e.status === 'PASSED' || e.status === 'FAILED');
   const missedEntries = entries.filter(e => e.status === 'MISSED');
 
-  // Top patterns
+  // Patterns breakdown with exact numbers
   const patternCounts = {};
   entries.forEach(e => {
     (e.patterns || []).forEach(p => {
-      if (!patternCounts[p]) patternCounts[p] = { total: 0, passed: 0, failed: 0 };
+      if (!patternCounts[p]) patternCounts[p] = { total: 0, passed: 0, failed: 0, missed: 0 };
       patternCounts[p].total++;
       if (e.status === 'PASSED') patternCounts[p].passed++;
-      if (e.status === 'FAILED') patternCounts[p].failed++;
+      else if (e.status === 'FAILED') patternCounts[p].failed++;
+      else patternCounts[p].missed++;
     });
   });
   const patternSummary = Object.entries(patternCounts)
-    .sort((a, b) => b[1].total - a[1].total)
-    .slice(0, 5)
-    .map(([name, s]) => `${name}: ${s.total} trades (${s.passed} Win, ${s.failed} Loss)`)
-    .join('; ');
+    .map(([name, s]) => {
+      const execTotal = s.passed + s.failed;
+      const wr = execTotal > 0 ? ((s.passed / execTotal) * 100).toFixed(1) + '%' : 'N/A';
+      return `• "${name}": Total ${s.total} logged (Passed: ${s.passed}, Failed: ${s.failed}, Missed: ${s.missed} | Win Rate: ${wr})`;
+    })
+    .join('\n');
 
-  // Mistakes aggregation
+  // Mistakes aggregation with exact frequencies
   const mistakeCounts = {};
   entries.forEach(e => {
     if (e.mistakes && e.mistakes.trim()) {
@@ -7599,39 +7605,53 @@ function buildJournalAIContext(focusEntry = null) {
   });
   const mistakesSummary = Object.entries(mistakeCounts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([m, cnt]) => `"${m}" (${cnt}x)`)
-    .join(', ');
-
-  // Recent 5 trades
-  const recentTrades = [...entries]
-    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
-    .slice(0, 5)
-    .map(e => {
-      const pl = e.customAttributes ? (e.customAttributes['P&L'] ?? '0') : '0';
-      return `- Date: ${e.date || 'N/A'}, Patterns: ${(e.patterns || []).join('/') || 'None'}, Bias: ${e.bias || 'N/A'}, Status: ${e.status || 'MISSED'}, P&L: ₹${pl}, Notes: "${(e.notes || '').slice(0, 80)}", Mistakes: "${(e.mistakes || '').slice(0, 80)}"`;
-    })
+    .map(([m, cnt]) => `• "${m}" (${cnt}x)`)
     .join('\n');
 
-  let ctx = `
-=== CURRENT TRADER PROFILE & PERFORMANCE SNAPSHOT ===
-- Active Workspace: ${currentProfile || 'Default'}
-- Total Setups Logged: ${entries.length} (Executed: ${executedEntries.length}, Missed: ${missedEntries.length})
-- Win Rate: ${stats.winRate.toFixed(1)}% (${stats.winningTradesCount} Wins / ${stats.losingTradesCount} Losses)
-- Profit Factor: ${stats.profitFactor === Infinity ? 'Infinite' : stats.profitFactor.toFixed(2)}
-- Net P&L: ₹${stats.netPL.toLocaleString()} (Gross Profit: ₹${stats.grossProfit.toLocaleString()}, Gross Loss: ₹${stats.grossLoss.toLocaleString()})
-- Expectancy per trade: ₹${stats.expectancy.toFixed(0)}
-- Top Patterns Tested: ${patternSummary || 'None logged'}
-- Frequently Logged Mistakes: ${mistakesSummary || 'No specific mistakes noted yet'}
+  // Custom Attributes list
+  const customAttrKeys = (customAttributes || []).map(a => a.name).join(', ');
 
-=== RECENT 5 LOGGED TRADES ===
-${recentTrades || 'No recent trades logged yet'}
+  // Complete setups database listing (token-efficient, factual records)
+  const setupsList = entries.map((e, idx) => {
+    const pl = e.customAttributes ? (e.customAttributes['P&L'] ?? '0') : '0';
+    const extraAttrs = [];
+    if (e.customAttributes) {
+      Object.entries(e.customAttributes).forEach(([k, v]) => {
+        if (k !== 'P&L' && v !== '' && v !== null && v !== undefined) {
+          extraAttrs.push(`${k}: ${v}`);
+        }
+      });
+    }
+    const extraStr = extraAttrs.length > 0 ? ` | Attrs: [${extraAttrs.join(', ')}]` : '';
+    const notesStr = e.notes ? ` | Notes: "${e.notes.replace(/\n/g, ' ').slice(0, 120)}"` : '';
+    const mistStr = e.mistakes ? ` | Mistakes: "${e.mistakes.replace(/\n/g, ' ').slice(0, 120)}"` : '';
+    return `${idx + 1}. [Date: ${e.date || 'N/A'}] Bias: ${e.bias || 'None'} | Patterns: ${(e.patterns || []).join(', ') || 'None'} | Status: ${e.status || 'MISSED'} | P&L: ₹${pl}${extraStr}${notesStr}${mistStr}`;
+  }).join('\n');
+
+  let ctx = `
+=== REAL TRADER JOURNAL DATABASE (${currentProfile || 'Default Workspace'}) ===
+- Total Logged Setups: ${entries.length}
+- Executed Trades: ${executedEntries.length} (Passed/Wins: ${stats.winningTradesCount}, Failed/Losses: ${stats.losingTradesCount})
+- Missed Setups: ${missedEntries.length}
+- Overall Win Rate: ${stats.winRate.toFixed(1)}%
+- Profit Factor: ${stats.profitFactor === Infinity ? 'Infinite (no losses)' : stats.profitFactor.toFixed(2)}
+- Net P&L: ₹${stats.netPL.toLocaleString()} (Gross Profit: ₹${stats.grossProfit.toLocaleString()}, Gross Loss: ₹${stats.grossLoss.toLocaleString()})
+- Custom Attribute Fields: ${customAttrKeys || 'None'}
+
+=== PATTERNS LOGGED IN DATABASE ===
+${patternSummary || 'No specific patterns tagged yet.'}
+
+=== LOGGED MISTAKES IN DATABASE ===
+${mistakesSummary || 'No specific mistakes logged yet.'}
+
+=== COMPLETE INVENTORY OF LOGGED SETUPS (${entries.length} Total) ===
+${setupsList || 'No trade setups logged in this workspace yet.'}
 `;
 
   if (focusEntry) {
     const fpl = focusEntry.customAttributes ? (focusEntry.customAttributes['P&L'] ?? '0') : '0';
     ctx += `
-=== FOCUSED TRADE SETUP BEING REVIEWED ===
+=== FOCUSED TRADE SETUP BEING DIRECTLY REVIEWED ===
 - Setup ID: ${focusEntry.id}
 - Date: ${focusEntry.date || 'N/A'}
 - Patterns: ${(focusEntry.patterns || []).join(', ') || 'None'}
@@ -7640,7 +7660,6 @@ ${recentTrades || 'No recent trades logged yet'}
 - P&L: ₹${fpl}
 - Notes: "${focusEntry.notes || 'None'}"
 - Mistakes Logged: "${focusEntry.mistakes || 'None'}"
-- Chart Images: ${(focusEntry.images || []).length} screenshot(s) attached.
 `;
   }
 
@@ -7657,25 +7676,22 @@ async function callGeminiAPI(messages, journalContext) {
     throw new Error('Please configure and save your Gemini API key in Settings first.');
   }
 
-  const systemPrompt = `You are Kobe Bryant — trading psychology mentor, performance coach, and disciplined master of the craft. Your voice, demeanor, and philosophy embody the MAMBA MENTALITY.
+  const systemPrompt = `You are Kobe Bryant — trading psychology mentor and master of execution. Your tone embodies the MAMBA MENTALITY: intense, disciplined, sharp, accountable, and focused 100% on the process over outcome.
 
-### YOUR PHILOSOPHY & IDENTITY:
-1. **Relentless Focus & Preparation**: "Everything negative — pressure, challenges — is all an opportunity for me to rise." Trading is not gambling. It is an uncompromising discipline of repetition, patience, risk control, and emotional mastery.
-2. **Obsession with the Process, Not the Outcome**: You judge a trade by whether the rules were followed with precision, NOT whether it made money. A profitable trade that broke rules is a bad trade. A losing trade taken according to edge and risk parameters is a great trade.
-3. **Extreme Accountability & Tough Love**: Never allow the trader to make excuses, blame the market, market makers, or bad luck. "If you don't believe in yourself, who will? But belief without preparation is delusion." Call them out constructively when they overtrade, chase, hesitate, or move stops.
-4. **Conquering Hesitation & Psychological Fears**:
-   - Hesitation is fear of losing or lack of trust in the system. Teach them to accept the predefined risk before pulling the trigger.
-   - FOMO and revenge trading are emotional weakness. When a trade is missed, the mamba resets: "Job's not finished. Next play."
-5. **Supportive Brother & Mentor**: When the trader is in pain, venting after a brutal drawdown or feeling down, listen with genuine respect for the grind. Validate their struggle, remind them of why they started, rebuild their psychological fortress, and give them actionable instructions to reset.
-6. **Journal Mastery**: You have direct access to their actual trading journal data (setups, win rate, mistakes, profit factor, recent trades). Reference their actual stats to give precise, laser-focused coaching.
+### CRITICAL RULES (STRICT ANTI-HALLUCINATION & BREVITY):
+1. **STRICT FACTUAL INTEGRITY (NO HALLUCINATIONS)**:
+   - ONLY cite numbers, dates, patterns, metrics, sessions, notes, or mistakes that EXPLICITLY exist in the REAL TRADER JOURNAL DATABASE provided below.
+   - NEVER invent or assume imaginary sessions (e.g. Asia/London if not in the data), fictional indicators (e.g. VWAP/hammers if not in the data), or fake trades.
+   - If the user asks about something not found in the database, explicitly state: "That is not logged in your journal."
+2. **BREVITY & PUNCHINESS (STRICT LENGTH LIMIT)**:
+   - Keep responses concise: strictly 2 to 3 short paragraphs maximum (strictly under 140 words total).
+   - No long preachy lectures or repetitive monologues.
+   - 1 sharp diagnosis based on their actual logged numbers, 1 psychological truth, 1 actionable rule for the next trade.
+3. **MAMBA VOICE**:
+   - Speak in the first person as Kobe ("Look,", "Listen to me,", "Job's not finished.").
+   - Bold critical punchlines. Tough love, zero excuses, process-obsessed.
 
-### COMMUNICATION STYLE:
-- Speak directly in the first person as Kobe ("Look,", "Listen to me,", "Here is what we are going to do", "Job's not finished").
-- Punchy, articulate, intense, inspiring, grounded in real execution.
-- Use clear markdown formatting with bold highlights, concise bullet points, and actionable takeaways.
-- Keep responses focused, impactful, and conversational.
-
-### LIVE TRADER JOURNAL CONTEXT:
+### REAL TRADER JOURNAL DATABASE:
 ${journalContext}`;
 
   const contents = messages.map(m => ({
@@ -7689,10 +7705,10 @@ ${journalContext}`;
       parts: [{ text: systemPrompt }]
     },
     generationConfig: {
-      temperature: 0.7,
+      temperature: 0.4,
       topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 2048
+      topP: 0.9,
+      maxOutputTokens: 500
     }
   };
 
@@ -7728,7 +7744,7 @@ ${journalContext}`;
       ];
       const fallbackPayload = {
         contents: fallbackContents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+        generationConfig: { temperature: 0.4, maxOutputTokens: 500 }
       };
       const fbResponse = await fetch(url, {
         method: 'POST',
@@ -7791,7 +7807,7 @@ async function sendCoachMessage(userText, focusEntry = null) {
 
   try {
     const journalCtx = buildJournalAIContext(focusEntry);
-    const recentChatContext = aiChatHistory.slice(-10);
+    const recentChatContext = aiChatHistory.slice(-8);
     const replyText = await callGeminiAPI(recentChatContext, journalCtx);
 
     const mambaMsgObj = {
@@ -7835,26 +7851,7 @@ function handleCoachInputKeydown(e, platform) {
 function autoResizeCoachTextarea(textarea) {
   if (!textarea) return;
   textarea.style.height = 'auto';
-  textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-}
-
-function quickPrompt(type, platform) {
-  let promptText = '';
-  if (type === 'pre_market') {
-    promptText = "Kobe, get me mentally locked in for today's trading session. Give me the Mamba pre-market mental priming, discipline check, and focus instructions.";
-  } else if (type === 'loss_reset') {
-    promptText = "I just took a frustrating loss and I feel emotional / tempted to revenge trade. Ground me right now. Break down my tape and help me reset my mind before I touch another order.";
-  } else if (type === 'journal_audit') {
-    promptText = "Audit my active journal data, win rate, and logged mistakes. Tell me brutally where I am leaking money and what specific psychological discipline I need to fix.";
-  } else if (type === 'hesitation') {
-    promptText = "I find myself hesitating to take high-probability setups because of the fear of losing money. Coach me on risk acceptance, pulling the trigger, and mamba confidence.";
-  }
-
-  if (promptText) {
-    const input = document.getElementById(`${platform}-coach-input`);
-    if (input) input.value = promptText;
-    sendCoachMessage(promptText);
-  }
+  textarea.style.height = Math.min(textarea.scrollHeight, 90) + 'px';
 }
 
 function scrollCoachToBottom(platform = null) {
@@ -7903,14 +7900,14 @@ function renderCoachView(container, platform) {
     apiWarningHtml = `
       <div class="coach-api-notice">
         <div class="coach-api-notice-left">
-          <i class="fa-solid fa-key" style="color: var(--accent-gold); font-size: 16px;"></i>
+          <i class="fa-solid fa-key" style="color: var(--accent-gold); font-size: 14px;"></i>
           <div>
             <strong>Gemini API Key Required</strong><br>
-            <span style="color: var(--text-secondary); font-size: 11px;">Configure your free Gemini 3.5 Flash Lite API key in Settings to activate Kobe Bryant Mamba Mentality coaching.</span>
+            <span style="color: var(--text-secondary); font-size: 11px;">Configure your API key in Settings to activate Kobe Bryant coaching.</span>
           </div>
         </div>
-        <button class="btn-primary" style="font-size: 11px; padding: 5px 14px; border-radius: 100px; white-space: nowrap;" onclick="openAISettings('${platform}')">
-          <i class="fa-solid fa-gear"></i> Open Settings
+        <button class="btn-primary" style="font-size: 11px; padding: 4px 12px; border-radius: 100px; white-space: nowrap;" onclick="openAISettings('${platform}')">
+          <i class="fa-solid fa-gear"></i> Settings
         </button>
       </div>
     `;
@@ -7926,29 +7923,11 @@ function renderCoachView(container, platform) {
           </div>
           <div>
             <div class="coach-welcome-title">Mamba Mentality Trading Coach</div>
-            <div class="coach-welcome-motto">"Job's Not Finished. Let's Master The Tape."</div>
+            <div class="coach-welcome-motto">"Job's Not Finished. Master The Tape."</div>
           </div>
         </div>
         <div class="coach-welcome-body">
-          Welcome to the gym. I am connected directly to your <strong>${escapeHtml(currentProfile || 'Default')}</strong> journal. 
-          I have your win rates, logged mistakes, and setup history right here. I'm here to build your psychological fortress, eliminate hesitation, kill revenge trading, and keep you strictly disciplined to the process.
-        </div>
-        <div style="font-size: 11.5px; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
-          <i class="fa-solid fa-bolt" style="color: var(--accent-gold);"></i> Quick Coaching Sessions:
-        </div>
-        <div class="coach-quick-chips">
-          <div class="coach-chip" onclick="quickPrompt('pre_market', '${platform}')">
-            <span>🎯 Pre-Market Priming</span>
-          </div>
-          <div class="coach-chip" onclick="quickPrompt('loss_reset', '${platform}')">
-            <span>🧘 Post-Loss Reset & Vent</span>
-          </div>
-          <div class="coach-chip" onclick="quickPrompt('journal_audit', '${platform}')">
-            <span>📊 Deep Journal Audit</span>
-          </div>
-          <div class="coach-chip" onclick="quickPrompt('hesitation', '${platform}')">
-            <span>🧠 Overcoming Hesitation</span>
-          </div>
+          Connected to <strong>${escapeHtml(currentProfile || 'Default')}</strong> (${entries.length} setups, ${stats.winRate.toFixed(1)}% WR). Tell me how you're feeling, let's break down your execution, or review your tape.
         </div>
       </div>
     `;
@@ -7989,38 +7968,64 @@ function renderCoachView(container, platform) {
     `;
   }
 
-  container.innerHTML = `
-    <div class="coach-view-container">
-      <!-- Header -->
-      <div class="coach-header-bar">
-        <div class="coach-header-left">
-          <div class="coach-mamba-badge">
-            <i class="fa-solid fa-brain"></i>
-          </div>
-          <div class="coach-header-title-wrap">
-            <div class="coach-header-title">
-              Mamba AI Mentor 
-              <span style="font-size: 10px; background: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3); border-radius: 100px; padding: 1px 7px; font-weight: 700;">${escapeHtml(aiConfig.model || 'Gemini')}</span>
-            </div>
-            <div class="coach-header-subtitle">Kobe Bryant Trading Psychology & Tape Review</div>
-          </div>
+  const headerHtml = (platform === 'mobile') ? `
+    <!-- Mobile Compact Toolbar -->
+    <div class="coach-header-bar mobile-compact">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 10px; background: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3); border-radius: 100px; padding: 2px 7px; font-weight: 700;">
+          <i class="fa-solid fa-brain" style="font-size: 9px; margin-right: 2px;"></i>${escapeHtml(aiConfig.model || 'Gemini 3.5 Flash Lite')}
+        </span>
+      </div>
+      <div class="coach-header-right" style="gap: 6px;">
+        <span class="coach-hud-pill" style="font-size: 10px; padding: 2px 6px;">
+          <strong style="color: var(--color-bull);">${stats.winRate.toFixed(1)}% WR</strong>
+          <span style="color: var(--text-muted);">·</span>
+          <span>${entries.length} Setups</span>
+        </span>
+        <button class="btn-icon" onclick="clearAIChatHistoryWithConfirm()" title="Clear Chat" style="padding: 4px 6px; font-size: 11px;">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+        <button class="btn-icon" onclick="openAISettings('mobile')" title="Settings" style="padding: 4px 6px; font-size: 11px;">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    </div>
+  ` : `
+    <!-- Desktop Header -->
+    <div class="coach-header-bar">
+      <div class="coach-header-left">
+        <div class="coach-mamba-badge">
+          <i class="fa-solid fa-brain"></i>
         </div>
-
-        <div class="coach-header-right">
-          <span class="coach-hud-pill">
-            <i class="fa-solid fa-chart-pie" style="color: var(--accent-gold);"></i> 
-            <span>${stats.winRate.toFixed(1)}% WR</span>
-            <span style="color: var(--text-muted);">|</span>
-            <span>${entries.length} Setups</span>
-          </span>
-          <button class="btn-icon" onclick="clearAIChatHistoryWithConfirm()" title="Clear Chat History" style="padding: 6px;">
-            <i class="fa-solid fa-trash-can"></i>
-          </button>
-          <button class="btn-icon" onclick="openAISettings('${platform}')" title="AI Settings" style="padding: 6px;">
-            <i class="fa-solid fa-gear"></i>
-          </button>
+        <div class="coach-header-title-wrap">
+          <div class="coach-header-title">
+            Mamba AI Mentor 
+            <span style="font-size: 10px; background: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 183, 3, 0.3); border-radius: 100px; padding: 1px 7px; font-weight: 700;">${escapeHtml(aiConfig.model || 'Gemini')}</span>
+          </div>
+          <div class="coach-header-subtitle">Kobe Bryant Trading Psychology & Tape Review</div>
         </div>
       </div>
+
+      <div class="coach-header-right">
+        <span class="coach-hud-pill">
+          <i class="fa-solid fa-chart-pie" style="color: var(--accent-gold);"></i> 
+          <span>${stats.winRate.toFixed(1)}% WR</span>
+          <span style="color: var(--text-muted);">|</span>
+          <span>${entries.length} Setups</span>
+        </span>
+        <button class="btn-icon" onclick="clearAIChatHistoryWithConfirm()" title="Clear Chat History" style="padding: 6px;">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+        <button class="btn-icon" onclick="openAISettings('desktop')" title="AI Settings" style="padding: 6px;">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = `
+    <div class="coach-view-container">
+      ${headerHtml}
 
       <!-- Chat Stream -->
       <div class="coach-chat-scroll" id="${platform}-coach-chat-scroll">
@@ -8031,18 +8036,11 @@ function renderCoachView(container, platform) {
 
       <!-- Input Area -->
       <div class="coach-input-container">
-        <div class="coach-quick-chips" style="margin-bottom: 8px; overflow-x: auto; white-space: nowrap; padding-bottom: 2px;">
-          <div class="coach-chip" onclick="quickPrompt('pre_market', '${platform}')">🎯 Pre-Market Prep</div>
-          <div class="coach-chip" onclick="quickPrompt('loss_reset', '${platform}')">🧘 Post-Loss Reset</div>
-          <div class="coach-chip" onclick="quickPrompt('journal_audit', '${platform}')">📊 Audit Mistakes</div>
-          <div class="coach-chip" onclick="quickPrompt('hesitation', '${platform}')">🧠 Fear & Hesitation</div>
-        </div>
-
         <div class="coach-input-inner">
           <textarea 
             class="coach-textarea" 
             id="${platform}-coach-input" 
-            placeholder="Talk to Kobe Bryant... (e.g. 'I hesitated on a breakout', 'Review my session')" 
+            placeholder="Talk to Kobe Bryant... (e.g. 'Why did I hesitate today?', 'Review my stats')" 
             rows="1"
             onkeydown="handleCoachInputKeydown(event, '${platform}')"
             oninput="autoResizeCoachTextarea(this)"></textarea>
@@ -8053,6 +8051,21 @@ function renderCoachView(container, platform) {
       </div>
     </div>
   `;
+
+  // Attach mobile keyboard listeners
+  if (platform === 'mobile') {
+    const mobInput = document.getElementById('mobile-coach-input');
+    const phoneContainer = document.querySelector('.phone-container');
+    if (mobInput && phoneContainer) {
+      mobInput.addEventListener('focus', () => {
+        phoneContainer.classList.add('keyboard-active');
+        setTimeout(() => scrollCoachToBottom('mobile'), 150);
+      });
+      mobInput.addEventListener('blur', () => {
+        phoneContainer.classList.remove('keyboard-active');
+      });
+    }
+  }
 
   scrollCoachToBottom(platform);
 }
